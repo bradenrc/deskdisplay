@@ -1,5 +1,6 @@
 // Page 1: clock, one news headline, today's agenda and the weather strip.
 #include <cstdio>
+#include <cstring>
 #include <string>
 
 #include "app.h"

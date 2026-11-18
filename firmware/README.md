@@ -59,5 +59,27 @@ millisecond clock, and a large-buffer allocator. The simulator's versions are in
 
 ## ESP32 target
 
-Not started. It will add an `esp32/` folder with the board's display and touch setup and
-its own `platform` functions (Wi-Fi and HTTP), and compile the same `ui/` code.
+`esp32/` builds the same `ui/` code for the Waveshare ESP32-S3-Touch-LCD-7B with
+[PlatformIO](https://platformio.org). `esp32/src/main.cpp` holds everything specific to the
+board: panel, touch, Wi-Fi and HTTP.
+
+**Status: it compiles (about 1.6 MB), but has not been run on the board yet.**
+
+```bash
+cp esp32/src/secrets.example.h esp32/src/secrets.h   # then set Wi-Fi name, password, server address
+```
+
+```bash
+cd esp32 && pio run -t upload && pio device monitor
+```
+
+Things to expect on first power-up, roughly in order of likelihood:
+
+- **Panel settings.** The display library has no entry for the 7B, so `platformio.ini`
+  selects its 1024×600 sibling, the 5B. If the picture is blank, shifted or flickering,
+  the timing values are the first thing to compare against Waveshare's 7B example.
+- **Picture drift while Wi-Fi is busy.** Set `USE_BOUNCE_BUFFER` to 1 in `main.cpp`.
+- **Brief pauses.** Network requests run on the same thread as the screen, so the display
+  freezes for a moment while a photo downloads.
+- **Server address.** `SERVER_URL` must be the server's address on your network. To the
+  ESP32, `localhost` means the ESP32 itself.
