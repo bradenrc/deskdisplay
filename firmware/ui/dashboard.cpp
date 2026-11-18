@@ -11,6 +11,8 @@ namespace {
 
 constexpr int MAX_TITLE_LINES = 3;
 constexpr size_t MAX_CHIPS = 3;
+// The game cards and the snow tile share one column, so their edges line up.
+constexpr int SIDE_X = 400, SIDE_W = 148;
 
 const char* const DAYS[] = {"Sunday",   "Monday", "Tuesday", "Wednesday",
                             "Thursday", "Friday", "Saturday"};
@@ -55,8 +57,7 @@ void show_games() {
         lv_obj_t* chip = make_box(chips_box);
         lv_obj_set_size(chip, lv_pct(100), LV_SIZE_CONTENT);
         lv_obj_set_flex_flow(chip, LV_FLEX_FLOW_COLUMN);
-        lv_obj_set_style_bg_color(chip, col(C_PANEL), 0);
-        lv_obj_set_style_bg_opa(chip, LV_OPA_COVER, 0);
+        tint(chip, live ? C_LIVE_TOP : C_GAME_TOP, live ? C_LIVE_BOTTOM : C_GAME_BOTTOM);
         lv_obj_set_style_radius(chip, 8, 0);
         lv_obj_set_style_pad_hor(chip, 10, 0);
         lv_obj_set_style_pad_ver(chip, 5, 0);
@@ -73,10 +74,10 @@ void show_games() {
 
 // Fresh snow sits to the right of the news, which narrows to make room.
 void show_snow() {
-    constexpr int FULL = 512, SNOW_W = 166, GAP = 10;
+    constexpr int FULL = SIDE_X + SIDE_W - 28, GAP = 10;
     lv_obj_clean(snow_box);
     bool any = !model.snow.empty();
-    lv_obj_set_width(news_box, any ? FULL - SNOW_W - GAP : FULL);
+    lv_obj_set_width(news_box, any ? FULL - SIDE_W - GAP : FULL);
     const lv_font_t* font = any ? &font_text_24 : &font_text_28;
     lv_obj_set_style_text_font(news_head, font, 0);
     lv_obj_set_height(news_head, lv_font_get_line_height(font) * (any ? 5 : 4));
@@ -85,7 +86,7 @@ void show_snow() {
         return;
     }
     lv_obj_remove_flag(snow_box, LV_OBJ_FLAG_HIDDEN);
-    make_label(snow_box, &font_text_16, C_BLUE, "Snow, 48 hours");
+    make_label(snow_box, &font_text_16, C_CLOUD, "Snow, 48 hours");
     for (const Snow& spot : model.snow) {
         lv_obj_t* block = make_box(snow_box);
         lv_obj_set_size(block, lv_pct(100), LV_SIZE_CONTENT);
@@ -299,18 +300,18 @@ lv_obj_t* rule(lv_obj_t* parent, int x, int y, int w, int h) {
 namespace dashboard {
 
 void build(lv_obj_t* t) {
-    constexpr int SPLIT = 566, STRIP_Y = 470, CHIPS_X = 404;
+    constexpr int SPLIT = 566, STRIP_Y = 470;
 
     // Left: date, clock, game chips, news, snow
     date_lbl = make_label(t, &font_text_20, C_MUTED, status_text.c_str());
     lv_obj_set_pos(date_lbl, 34, 20);
-    time_lbl = make_label(t, &font_clock_124, C_TEXT);
+    time_lbl = make_label(t, &font_clock_120, C_TEXT);
     lv_obj_set_pos(time_lbl, 28, 78);
     ampm_lbl = make_label(t, &font_text_28, C_MUTED);
 
     chips_box = make_box(t);
-    lv_obj_set_pos(chips_box, CHIPS_X, 22);
-    lv_obj_set_size(chips_box, SPLIT - CHIPS_X - 10, 174);
+    lv_obj_set_pos(chips_box, SIDE_X, 22);
+    lv_obj_set_size(chips_box, SIDE_W, 174);
     lv_obj_set_flex_flow(chips_box, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(chips_box, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
     lv_obj_set_style_pad_row(chips_box, 6, 0);
@@ -318,9 +319,8 @@ void build(lv_obj_t* t) {
     constexpr int NEWS_Y = 204, NEWS_H = STRIP_Y - NEWS_Y - 18;
     news_box = make_box(t);
     lv_obj_set_pos(news_box, 28, NEWS_Y);
-    lv_obj_set_size(news_box, SPLIT - 28 - 26, NEWS_H);
-    lv_obj_set_style_bg_color(news_box, col(C_PANEL), 0);
-    lv_obj_set_style_bg_opa(news_box, LV_OPA_COVER, 0);
+    lv_obj_set_size(news_box, SIDE_X + SIDE_W - 28, NEWS_H);
+    tint(news_box, C_NEWS_TOP, C_NEWS_BOTTOM);
     lv_obj_set_style_radius(news_box, 14, 0);
     lv_obj_set_style_pad_all(news_box, 18, 0);
     news_src = make_label(news_box, &font_text_18, C_BLUE, "News");
@@ -335,13 +335,12 @@ void build(lv_obj_t* t) {
     lv_obj_align(news_pager, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
 
     snow_box = make_box(t);
-    lv_obj_set_size(snow_box, 166, NEWS_H);
-    lv_obj_set_pos(snow_box, SPLIT - 26 - 166, NEWS_Y);
+    lv_obj_set_size(snow_box, SIDE_W, NEWS_H);
+    lv_obj_set_pos(snow_box, SIDE_X, NEWS_Y);
     lv_obj_set_flex_flow(snow_box, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_bg_color(snow_box, col(C_PANEL), 0);
-    lv_obj_set_style_bg_opa(snow_box, LV_OPA_COVER, 0);
+    tint(snow_box, C_SNOW_TOP, C_SNOW_BOTTOM);
     lv_obj_set_style_radius(snow_box, 14, 0);
-    lv_obj_set_style_pad_all(snow_box, 14, 0);
+    lv_obj_set_style_pad_all(snow_box, 12, 0);
     lv_obj_add_flag(snow_box, LV_OBJ_FLAG_HIDDEN);
 
     // Right: agenda

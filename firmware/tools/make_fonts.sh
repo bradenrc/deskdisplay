@@ -12,7 +12,7 @@ done
 # The clock: digits and a colon only, so a very large size stays small in flash.
 npx --yes lv_font_conv@1.5.3 --font "$TTF" -r "0x30-0x3A,0x20" --size 140 --bpp 4 --format lvgl \
   --no-compress --lv-include lvgl.h --lv-font-name font_clock_140 -o ui/fonts/font_clock_140.c
-npx --yes lv_font_conv@1.5.3 --font "$TTF" -r "0x30-0x3A,0x20" --size 124 --bpp 4 --format lvgl \
-  --no-compress --lv-include lvgl.h --lv-font-name font_clock_124 -o ui/fonts/font_clock_124.c
+npx --yes lv_font_conv@1.5.3 --font "$TTF" -r "0x30-0x3A,0x20" --size 120 --bpp 4 --format lvgl \
+  --no-compress --lv-include lvgl.h --lv-font-name font_clock_120 -o ui/fonts/font_clock_120.c
 npx --yes lv_font_conv@1.5.3 --font "$TTF" -r "0x30-0x3A,0x20" --size 56 --bpp 4 --format lvgl \
   --no-compress --lv-include lvgl.h --lv-font-name font_clock_56 -o ui/fonts/font_clock_56.c

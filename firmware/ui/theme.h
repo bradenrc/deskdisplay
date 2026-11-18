@@ -28,7 +28,7 @@ LV_FONT_DECLARE(font_text_24)
 LV_FONT_DECLARE(font_text_28)
 LV_FONT_DECLARE(font_text_40)
 LV_FONT_DECLARE(font_clock_56)
-LV_FONT_DECLARE(font_clock_124)
+LV_FONT_DECLARE(font_clock_120)
 LV_FONT_DECLARE(font_clock_140)
 
 static inline lv_color_t col(uint32_t hex) { return lv_color_hex(hex); }
@@ -41,6 +41,25 @@ static inline lv_obj_t* make_label(lv_obj_t* parent, const lv_font_t* font, uint
     lv_obj_set_style_text_color(label, col(hex), 0);
     lv_label_set_text(label, text);
     return label;
+}
+
+// Tile colours: each kind of tile gets its own dark tint, lighter at the top, so the screen
+// is not one flat grey. Kept subtle; on a 16-bit panel a strong dark gradient shows bands.
+#define C_NEWS_TOP 0x1F2B3A
+#define C_NEWS_BOTTOM 0x141B25
+#define C_SNOW_TOP 0x17323F
+#define C_SNOW_BOTTOM 0x0F212B
+#define C_GAME_TOP 0x2A2620
+#define C_GAME_BOTTOM 0x1C1A16
+#define C_LIVE_TOP 0x3D1F1F
+#define C_LIVE_BOTTOM 0x241414
+
+// Fills a tile with a soft top-to-bottom tint.
+static inline void tint(lv_obj_t* obj, uint32_t top, uint32_t bottom) {
+    lv_obj_set_style_bg_color(obj, lv_color_hex(top), 0);
+    lv_obj_set_style_bg_grad_color(obj, lv_color_hex(bottom), 0);
+    lv_obj_set_style_bg_grad_dir(obj, LV_GRAD_DIR_VER, 0);
+    lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, 0);
 }
 
 // A plain container: no background, border, padding or scrolling.
