@@ -14,14 +14,11 @@ DEFAULTS: dict[str, Any] = {
     "timezone": "America/Denver",
     "location": {"latitude": 39.74, "longitude": -104.99},
     "units": "fahrenheit",
-    # The address Google sends the browser back to after sign-in. Must be
-    # http://localhost:<port> or a real https:// address (Google's rule).
-    "public_url": "http://localhost:8080",
     "agenda": {
-        "calendar_ids": ["primary"],
+        # Private iCal links; normally added on the setup page instead.
+        "ical_urls": [],
         "soon_minutes": 10,
         "refresh_minutes": 5,
-        "hide_declined": True,
     },
     "weather": {"refresh_minutes": 15, "hourly_step": 2, "hourly_count": 5},
     "news": {
@@ -38,7 +35,9 @@ DEFAULTS: dict[str, Any] = {
         "refresh_minutes": 15,
         "fit": "cover",
         "master_max_px": 1920,
-        "max_photos": 2000,
+        "pool_size": 300,
+        "daily_swap": 30,
+        "index_hours": 12,
     },
 }
 

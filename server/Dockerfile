@@ -9,6 +9,9 @@ WORKDIR /srv
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# rclone reads Google Drive using its own registered Google app (no Cloud project needed).
+COPY --from=rclone/rclone:1 /usr/local/bin/rclone /usr/local/bin/rclone
+
 COPY app ./app
 
 RUN useradd --uid 1000 --create-home app \
@@ -16,7 +19,8 @@ RUN useradd --uid 1000 --create-home app \
     && chown app:app /data
 USER app
 
-EXPOSE 8080
+# 8080: API and setup page. 53682: used only during the Google Drive sign-in.
+EXPOSE 8080 53682
 VOLUME ["/data"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3)"

@@ -1,8 +1,8 @@
 # Desk companion server
 
 A small Docker service that gathers everything the desk screen shows and hands it over in
-one request: today's Google Calendar agenda, photos from a Google Drive folder, news
-headlines, weather, sunrise and sunset, and the moon phase.
+one request: today's calendar agenda, photos from a Google Drive folder, news headlines,
+weather, sunrise and sunset, and the moon phase.
 
 The screen (ESP32 or a browser) stays simple: it fetches `/api/dashboard` once a minute and
 `/api/photo/next` whenever it wants a new picture.
@@ -14,46 +14,57 @@ cp config/config.example.yaml config/config.yaml   # then set your timezone and 
 docker compose up -d --build
 ```
 
-Open <http://localhost:8080/setup>. Weather and news work immediately. Calendar and photos
-need the Google sign-in below.
+Open <http://localhost:8080/setup>. Weather and news work immediately. The setup page has
+three steps for the rest. No Google Cloud project is needed.
 
 The container runs as user id 1000 and writes to `./data`. On Linux, if `./data` is owned
 by a different user, run `sudo chown -R 1000:1000 data`.
 
-## Connect Google (once)
+## 1. Calendar: a private iCal link
 
-Sign-in happens on Google's own pages in your browser, including two-step verification.
-The server never sees your password. It receives a token limited to **read-only Calendar**
-and **read-only Drive**, stored in `data/google_token.json`, which you can revoke at any
-time at <https://myaccount.google.com/permissions>.
+In Google Calendar open **Settings**, choose the calendar under **Settings for my
+calendars**, go to **Integrate calendar** and copy the **Secret address in iCal format**.
+Paste it into step 1 of the setup page. You can add several calendars.
 
-Google requires each self-hosted app to register its own credentials. This is free:
+There is no sign-in and nothing expires. Anyone who has the link can read that calendar,
+so the server stores it in `data/settings.json`, never logs it, and shows only a masked
+form on the setup page. Google lets you reset the link in the same settings screen.
 
-1. In [Google Cloud Console](https://console.cloud.google.com/), create a project.
-2. Enable the **Google Calendar API** and the **Google Drive API**.
-3. Configure the OAuth consent screen as **External** and add yourself as a user. Then
-   **publish it** so its status is **In production**. While it is in **Testing**, Google
-   expires the sign-in every 7 days. You will see an "unverified app" warning when signing
-   in; that is expected for a personal app, and you can continue past it.
-4. Create credentials: **OAuth client ID**, type **Web application**, with the authorized
-   redirect URI `http://localhost:8080/auth/callback`.
-5. Download the JSON, open the setup page, and paste it into step 1.
-6. Click **Connect Google account**, approve, then choose calendars and paste your Drive
-   photo folder link.
+## 2. Google Drive: sign in once
 
-### Signing in when the server is another machine
+Click **Sign in with Google** in step 2. A Google tab opens; sign in there (including
+two-step verification) and approve. Google names the app **rclone**: that is the
+open-source tool this server uses to read Drive, and it comes with its own registered
+Google app. Access is **read-only Drive**, stored in `data/rclone/rclone.conf`, and you can
+revoke it at <https://myaccount.google.com/permissions>.
 
-Google only redirects to `http://localhost` or a real `https://` address, never to a LAN
-address like `http://192.168.1.20:8080`. Pick whichever of these suits you:
+Google finishes by sending the browser to `http://127.0.0.1:53682/`. What happens next
+depends on where your browser is:
 
-- **Paste the address (no extra setup).** Open the setup page at the server's LAN address
-  and click Connect. After you approve, the browser says it cannot reach `localhost`. Copy
-  the full address from the address bar and paste it into the box on the setup page.
-- **SSH tunnel (fully automatic).** Run `ssh -L 8080:localhost:8080 you@server`, then open
-  <http://localhost:8080/setup> on your own computer.
-- **Your own https address.** If the container sits behind a reverse proxy with a real
-  certificate, set `public_url: https://your.domain` in `config.yaml` and register
-  `https://your.domain/auth/callback` as the redirect URI.
+- **Browser on the same machine as Docker:** it completes by itself, because
+  `docker-compose.yml` publishes that port on the local machine.
+- **Server is another machine:** the Google tab ends on "This site can't be reached".
+  That is expected. Copy the whole address from the address bar and paste it into the box
+  on the setup page.
+- **Or use an SSH tunnel** to make the remote case automatic:
+  `ssh -L 8080:localhost:8080 -L 53682:localhost:53682 you@server`, then open
+  <http://localhost:8080/setup>.
+
+## 3. Photos: a folder of any size
+
+Paste a Drive folder link in step 3 (or the My Drive link for everything). Subfolders are
+included, and each subfolder's name becomes the photo caption.
+
+The folder is **not mirrored**. The server reads only the list of file names, then keeps a
+small rotating pool on disk:
+
+- `photos.pool_size` (default 300) photos are downloaded, shrunk to screen size, and the
+  originals are discarded. That is roughly 100 MB however large the Drive folder is.
+- `photos.daily_swap` (default 30) of them are replaced with new random picks each day.
+- The list of names is re-read every `photos.index_hours` (default 12).
+
+A local folder can be used as well or instead: mount it in `docker-compose.yml` and set
+`photos.local_dir`. Local folders are shown in full.
 
 ## What the screen reads
 
@@ -68,18 +79,16 @@ address like `http://192.168.1.20:8080`. Pick whichever of these suits you:
 
 Agenda events carry a `status` the screen can style directly: `past`, `now` (in
 progress), `soon` (starts within `agenda.soon_minutes`) or `upcoming`. Photo responses
-include the caption in the `X-Photo-Caption` header (the Drive subfolder name and the month
-the photo was taken).
+include the caption in the `X-Photo-Caption` header (the subfolder name and, when the
+photo records it, the month it was taken).
 
 ## Notes
 
-- **Photos** are downloaded once, shrunk to `photos.master_max_px`, and the originals are
-  discarded, so 2,000 photos take roughly 1 GB. Removing a photo from the Drive folder
-  removes it here at the next sync. HEIC files from iPhones are converted.
 - **If a source fails**, the last good data keeps being served and `/api/status` says why.
 - **The setup page has no login.** Anyone on your network can open it, so do not expose
   port 8080 to the internet.
 - **Secrets** live in `data/` and `config/`, both ignored by git.
+- **HEIC** photos from iPhones are converted automatically.
 
 ## Develop
 

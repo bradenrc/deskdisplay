@@ -7,15 +7,9 @@ location:
   longitude: -104.99
 units: fahrenheit # or celsius
 
-# Where Google sends the browser after sign-in. Google only allows
-# http://localhost:<port> or a real https:// address here. Leave this alone unless
-# you serve this container behind your own https domain.
-public_url: http://localhost:8080
-
 agenda:
   soon_minutes: 10 # outline an event when it starts within this many minutes
   refresh_minutes: 5
-  hide_declined: true
 
 weather:
   refresh_minutes: 15
@@ -37,5 +31,7 @@ photos:
   local_dir: "" # e.g. /photos, if you mount a folder in docker-compose.yml
   refresh_minutes: 15
   fit: cover # cover = fill the screen and crop; contain = whole photo with black bars
-  master_max_px: 1920 # Drive photos are shrunk to this before being stored
-  max_photos: 2000
+  master_max_px: 1920 # photos are shrunk to this before being stored
+  pool_size: 300 # how many Drive photos to keep on this server at once
+  daily_swap: 30 # how many of them to replace with new random picks each day
+  index_hours: 12 # how often to re-read the list of photos in the Drive folder

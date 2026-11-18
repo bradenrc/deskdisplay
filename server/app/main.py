@@ -12,28 +12,24 @@ from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
-from google.auth.exceptions import RefreshError
 
-from . import agenda, astro, config, gcal, news, weather
-from .google_auth import GoogleAuth
+from . import agenda, astro, config, ical, news, weather
 from .jobs import Runner, Skip, Store
 from .photos import Library
+from .rclone import Rclone
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
 )
 
-EXPIRED = "Google sign-in has expired or was revoked. Reconnect on the setup page."
-
 
 class Core:
-    def __init__(self, cfg: dict, data_dir: Path, config_dir: Path | None):
+    def __init__(self, cfg: dict, data_dir: Path):
         self.cfg = cfg
         self.tz = ZoneInfo(cfg["timezone"])
         self.data_dir = data_dir
         self.store = Store()
         self.settings = config.Settings(data_dir / "settings.json")
-        self.auth = GoogleAuth(data_dir, config_dir)
         self.library = Library(data_dir / "photos")
         self.runner = Runner(
             self.store,
@@ -44,20 +40,20 @@ class Core:
                 ("photos", self.job_photos, cfg["photos"]["refresh_minutes"]),
             ],
         )
+        self.drive = Rclone(
+            data_dir, on_connected=lambda: self.runner.trigger("photos")
+        )
 
     # ---- effective settings (setup page overrides the config file) ---------------
 
-    def calendar_ids(self) -> list[str]:
-        return self.settings.get("calendar_ids") or self.cfg["agenda"]["calendar_ids"]
+    def ical_urls(self) -> list[str]:
+        return self.settings.get("ical_urls") or self.cfg["agenda"]["ical_urls"]
 
     def drive_folder_id(self) -> str:
         return (
             self.settings.get("drive_folder_id")
             or self.cfg["photos"]["drive_folder_id"]
         )
-
-    def redirect_uri(self) -> str:
-        return self.cfg["public_url"].rstrip("/") + "/auth/callback"
 
     # ---- jobs --------------------------------------------------------------------
 
@@ -79,49 +75,39 @@ class Core:
         )
 
     def job_agenda(self) -> None:
-        sess = self.auth.session()
-        if not sess:
+        urls = self.ical_urls()
+        if not urls:
             self.store.drop("agenda")
-            raise Skip("Google account not connected")
-        try:
-            events = gcal.fetch(
-                sess, self.calendar_ids(), self.tz, self.cfg["agenda"]["hide_declined"]
-            )
-        except RefreshError as exc:
-            raise RuntimeError(EXPIRED) from exc
-        self.store.set("agenda", events)
+            raise Skip("No calendar link added yet")
+        self.store.set("agenda", ical.fetch(urls, self.tz))
 
     def job_photos(self) -> None:
         photos_cfg = self.cfg["photos"]
         self.library.sync_local(photos_cfg["local_dir"])
         folder = self.drive_folder_id()
-        sess = self.auth.session()
-        if folder and sess:
-            try:
-                self.library.sync_drive(
-                    sess, folder, photos_cfg["master_max_px"], photos_cfg["max_photos"]
-                )
-            except RefreshError as exc:
-                raise RuntimeError(EXPIRED) from exc
-        elif not folder:
-            self.library.clear_drive()
+        connected = self.drive.connected()
+        if not folder:
+            self.library.clear_pool()
+        elif connected:
+            self.library.sync_pool(
+                self.drive,
+                folder,
+                pool_size=photos_cfg["pool_size"],
+                daily_swap=photos_cfg["daily_swap"],
+                index_hours=photos_cfg["index_hours"],
+                master_max=photos_cfg["master_max_px"],
+            )
         self.store.set("photos", self.library.count())
+        if folder and not connected:
+            raise Skip("Google Drive not connected")
         if not folder and not photos_cfg["local_dir"]:
             raise Skip("No photo folder chosen yet")
-        if folder and not sess:
-            raise Skip("Google account not connected")
 
     # ---- views -------------------------------------------------------------------
 
     def dashboard(self) -> dict:
         now = datetime.now(self.tz)
         events = self.store.get("agenda")
-        weather_view = weather.view(
-            self.store.get("weather"),
-            now,
-            self.cfg["weather"]["hourly_step"],
-            self.cfg["weather"]["hourly_count"],
-        )
         return {
             "time": {
                 "epoch": int(now.timestamp()),
@@ -134,11 +120,15 @@ class Core:
                 if events is None
                 else agenda.build(events, now, self.cfg["agenda"]["soon_minutes"])
             ),
-            "weather": weather_view,
+            "weather": weather.view(
+                self.store.get("weather"),
+                now,
+                self.cfg["weather"]["hourly_step"],
+                self.cfg["weather"]["hourly_count"],
+            ),
             "moon": astro.moon(now),
             "news": news.view(self.store.get("news"), now.timestamp()),
             "photos": {"count": self.library.count()},
-            "google_connected": self.auth.connected(),
         }
 
     def status(self) -> dict:
@@ -152,10 +142,11 @@ class Core:
                 "age_seconds": None if updated is None else int(now - updated),
             }
         return {
-            "google_client": self.auth.client_path() is not None,
-            "google_connected": self.auth.connected(),
-            "google_account": self.settings.get("google_account", ""),
+            "calendar_links": len(self.ical_urls()),
+            "drive_connected": self.drive.connected(),
+            "drive_folder": bool(self.drive_folder_id()),
             "photos": self.library.count(),
+            "photos_in_drive_folder": self.library.catalog_size,
             "sources": sources,
         }
 
@@ -170,7 +161,7 @@ def create_app(
         config_path or os.environ.get("CONFIG_PATH", "/config/config.yaml")
     )
     data_dir.mkdir(parents=True, exist_ok=True)
-    core = Core(config.load(config_path), data_dir, config_path.parent)
+    core = Core(config.load(config_path), data_dir)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -206,7 +197,12 @@ def create_app(
         if not path:
             raise HTTPException(404, "Photo not found")
         entry = core.library.get(pid) or {}
-        caption = entry.get("caption", "").encode("ascii", "ignore").decode()
+        caption = (
+            entry.get("caption", "")
+            .replace("·", "-")
+            .encode("ascii", "ignore")
+            .decode()
+        )
         return FileResponse(
             path,
             media_type="image/jpeg",

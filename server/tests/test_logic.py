@@ -1,8 +1,9 @@
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from app import agenda, astro, gcal, news, weather
+from app import agenda, astro, ical, news, weather
 from app.photos import parse_folder_id
+from app.rclone import extract_token
 
 TZ = ZoneInfo("America/Denver")
 
@@ -70,26 +71,104 @@ def test_agenda_empty():
     assert out["events"] == [] and out["free_after"] is None
 
 
-def test_gcal_normalize():
-    timed = gcal.normalize(
-        {
-            "summary": "Call",
-            "start": {"dateTime": "2026-11-16T11:00:00-07:00"},
-            "end": {"dateTime": "2026-11-16T11:30:00-07:00"},
-        },
-        TZ,
-    )
-    assert timed["start"] == at(11).timestamp() and not timed["all_day"]
-    all_day = gcal.normalize(
-        {"start": {"date": "2026-11-16"}, "end": {"date": "2026-11-17"}}, TZ
-    )
-    assert all_day["all_day"] and all_day["title"] == "(No title)"
-    assert all_day["start"] == at(0).timestamp()
-    assert gcal.normalize({"status": "cancelled"}, TZ) is None
+ICS = b"""BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//test//EN
+BEGIN:VEVENT
+UID:weekly
+SUMMARY:Weekly sync
+DTSTART;TZID=America/Denver:20261102T103000
+DTEND;TZID=America/Denver:20261102T110000
+RRULE:FREQ=WEEKLY;BYDAY=MO
+LOCATION:Room 4
+END:VEVENT
+BEGIN:VEVENT
+UID:utc
+SUMMARY:Call in UTC
+DTSTART:20261116T180000Z
+DTEND:20261116T183000Z
+END:VEVENT
+BEGIN:VEVENT
+UID:allday
+SUMMARY:Holiday
+DTSTART;VALUE=DATE:20261116
+DTEND;VALUE=DATE:20261117
+END:VEVENT
+BEGIN:VEVENT
+UID:gone
+SUMMARY:Cancelled thing
+STATUS:CANCELLED
+DTSTART:20261116T200000Z
+DTEND:20261116T210000Z
+END:VEVENT
+BEGIN:VEVENT
+UID:floating
+DTSTART:20261117T090000
+DTEND:20261117T093000
+END:VEVENT
+BEGIN:VEVENT
+UID:old
+SUMMARY:Last month
+DTSTART:20261016T180000Z
+DTEND:20261016T183000Z
+END:VEVENT
+END:VCALENDAR
+"""
+
+
+def test_ical_parse_expands_and_normalizes():
+    events = ical.parse(ICS, TZ, at(0), at(0, day=18))
+    by_title = {e["title"]: e for e in events}
+    assert set(by_title) == {"Weekly sync", "Call in UTC", "Holiday", "(No title)"}
+    weekly = by_title["Weekly sync"]  # third repeat of a weekly event lands on the 16th
     assert (
-        gcal.normalize({"eventType": "workingLocation", "start": {}, "end": {}}, TZ)
-        is None
+        weekly["start"] == at(10, 30).timestamp()
+        and weekly["end"] == at(11).timestamp()
     )
+    assert weekly["location"] == "Room 4" and not weekly["all_day"]
+    assert (
+        by_title["Call in UTC"]["start"] == at(11).timestamp()
+    )  # 18:00Z is 11:00 in Denver
+    holiday = by_title["Holiday"]
+    assert holiday["all_day"] and holiday["start"] == at(0).timestamp()
+    assert holiday["end"] == at(0, day=17).timestamp()
+    assert (
+        by_title["(No title)"]["start"] == at(9, day=17).timestamp()
+    )  # floating = local time
+    built = agenda.build(events, at(10, 52))
+    assert [e["title"] for e in built["current"]] == ["Weekly sync"]
+    assert built["next"]["title"] == "Call in UTC" and built["all_day"] == ["Holiday"]
+
+
+def test_ical_urls():
+    assert (
+        ical.normalize_url("webcal://example.com/a.ics") == "https://example.com/a.ics"
+    )
+    assert (
+        ical.normalize_url(" https://example.com/a.ics ") == "https://example.com/a.ics"
+    )
+    assert (
+        ical.normalize_url("file:///etc/passwd") == ""
+        and ical.normalize_url("nope") == ""
+    )
+    secret = "https://calendar.google.com/calendar/ical/me%40example.com/private-abcdef123456/basic.ics"
+    masked = ical.mask(secret)
+    assert "private-abcdef" not in masked and masked.startswith("calendar.google.com/")
+
+
+def test_extract_token():
+    token = '{"access_token":"a","token_type":"Bearer","refresh_token":"r","expiry":"2026-01-01T00:00:00Z"}'
+    plain = f"NOTICE: Got code\nPaste the following into your remote machine --->\n{token}\n<---End paste\n"
+    assert extract_token(plain) == token
+    import base64
+    import json
+
+    wrapped = (
+        base64.b64encode(json.dumps({"token": token}).encode()).decode().rstrip("=")
+    )
+    assert extract_token(f"--->\n{wrapped}\n<---End paste") == token
+    assert extract_token("NOTICE: Waiting for code...") is None
+    assert extract_token("--->\nnot a token\n<---") is None
 
 
 def test_moon_known_dates():
@@ -168,3 +247,5 @@ def test_parse_folder_id():
     assert parse_folder_id(fid) == fid
     assert parse_folder_id("' or 1=1") == ""
     assert parse_folder_id("") == ""
+    assert parse_folder_id("https://drive.google.com/drive/my-drive") == "root"
+    assert parse_folder_id("root") == "root"
