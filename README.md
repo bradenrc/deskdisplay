@@ -5,4 +5,5 @@ and aquarium off-hours.
 
 - [`server/`](server/README.md): Docker service that supplies calendar, photos, news and
   weather to the screen. Start here.
-- `firmware/`: ESP32-S3 screen firmware (Waveshare 7" 1024×600 touch). Not started yet.
+- [`firmware/`](firmware/README.md): the screen's user interface and a desktop simulator for it.
+  The ESP32-S3 build (Waveshare 7" 1024×600 touch) is not started yet.
