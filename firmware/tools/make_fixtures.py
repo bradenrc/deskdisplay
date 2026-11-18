@@ -72,9 +72,9 @@ def mountain(name, recent_per_hour, coming_per_hour):
 
 # Three games in the three states a card can be in.
 games = [
-    {"state": "in", "line1": "SDSU @ BOIS", "line2": "17–24 · 3rd 8:42", "tv": "USA Net"},
-    {"state": "pre", "line1": "IU @ WASH", "line2": "Sat 1:30 pm", "tv": "Peacock"},
-    {"state": "post", "line1": "SEA @ LV", "line2": "21–13 · Final", "tv": "CBS"},
+    {"state": "in", "line1": "SDSU @ BOIS", "line2": "17–24 · 3rd 8:42", "tv": "USA Net", "colors": ["#0033a0", "#d64309"]},
+    {"state": "pre", "line1": "IU @ WASH", "line2": "Sat 1:30 pm", "tv": "Peacock", "colors": ["#33006f", "#e8d3a2"]},
+    {"state": "post", "line1": "SEA @ LV", "line2": "21–13 · Final", "tv": "CBS", "colors": ["#002a5c", "#69be28"]},
 ]
 view = weather.view(forecast, now, 2, 5)
 view["air"] = weather.air_view({"aqi": 42})

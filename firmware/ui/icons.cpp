@@ -74,9 +74,26 @@ struct Pen {
         circle(cx, cy, r, C_AMBER);
     }
 
+    // Drawn row by row as "disc minus an offset disc", so it works on any background colour.
     void crescent(float cx, float cy, float r) const {
-        circle(cx, cy, r, 0xCECBF6);
-        circle(cx + r * 0.45f, cy - r * 0.25f, r * 0.85f, C_BG);
+        lv_draw_rect_dsc_t d;
+        lv_draw_rect_dsc_init(&d);
+        d.bg_color = col(0xCECBF6);
+        float R = r * s, bite = R * 0.85f;
+        float ox = x + cx * s, oy = y + cy * s;       // centre of the moon
+        float bx = ox + R * 0.45f, by = oy - R * 0.25f;  // centre of the part cut away
+        for (int row = (int)floorf(oy - R); row <= (int)ceilf(oy + R); row++) {
+            float dy = row + 0.5f - oy;
+            if (fabsf(dy) >= R) continue;
+            float half = sqrtf(R * R - dy * dy);
+            float right = ox + half;
+            float cut = row + 0.5f - by;
+            if (fabsf(cut) < bite) right = LV_MIN(right, bx - sqrtf(bite * bite - cut * cut));
+            int x1 = (int)lroundf(ox - half), x2 = (int)lroundf(right) - 1;
+            if (x2 < x1) continue;
+            lv_area_t a = {x1, row, x2, row};
+            lv_draw_rect(layer, &d, &a);
+        }
     }
 
     // A cloud about 0.8 wide, centred on (cx, cy).

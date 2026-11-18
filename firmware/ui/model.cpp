@@ -2,6 +2,8 @@
 
 #include <ArduinoJson.h>
 
+#include <cstdlib>
+
 static Event read_event(JsonObjectConst e) {
     Event ev;
     ev.title = e["title"] | "";
@@ -89,6 +91,12 @@ bool parse_model(const char* json, size_t len, Model& out) {
         game.state = g["state"] | "pre";
         game.line1 = g["line1"] | "";
         game.line2 = g["line2"] | "";
+        for (JsonVariantConst c : g["colors"].as<JsonArrayConst>()) {
+            const char* hex = c | "";
+            if (hex[0] == '#' && game.color_count < 2) {
+                game.colors[game.color_count++] = (uint32_t)strtoul(hex + 1, nullptr, 16);
+            }
+        }
         m.games.push_back(game);
     }
     for (JsonObjectConst s : doc["snow"].as<JsonArrayConst>()) {

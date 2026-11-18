@@ -464,6 +464,7 @@ def test_sports_pick_and_chips():
         "line1": "SEA @ LV",
         "line2": "21–13 · Final",
         "tv": "CBS",
+        "colors": [],
     }
 
     later = at(
@@ -476,6 +477,7 @@ def test_sports_pick_and_chips():
         "line1": "LAR @ SEA",
         "line2": "Sat 3:00 pm",
         "tv": "Fox",
+        "colors": [],
     }
     assert sports.chip(upcoming, at(9, day=21))["line2"] == "Today 3:00 pm"
     assert sports.chip(far, at(9, day=29))["line2"] == "Mon · TBD"
@@ -498,6 +500,7 @@ def test_sports_pick_and_chips():
         "line1": "LAR @ SEA",
         "line2": "10–17 · 3rd 8:42",
         "tv": "Fox",
+        "colors": [],
     }
     assert (
         sports.chip(dict(live, detail="Halftime"), at(16, day=21))["line2"]
@@ -515,6 +518,14 @@ def test_sports_pick_and_chips():
     assert not sports.may_be_live(last, now.timestamp()) and not sports.may_be_live(
         None, 0
     )
+
+    assert sports.team_colors({"color": "002244", "alternateColor": "69BE28"}) == [
+        "#002244",
+        "#69be28",
+    ]
+    assert sports.team_colors({"color": "nope"}) == [] and sports.team_colors({}) == []
+    striped = sports.chip(dict(final, colors=["#002244", "#69be28"]), now)
+    assert striped["colors"] == ["#002244", "#69be28"]
 
 
 def test_sports_tracker_polls_live_only_when_needed(monkeypatch):

@@ -58,6 +58,16 @@ def parse_game(event_id: str, date_iso: str, competition: dict) -> dict:
     }
 
 
+def team_colors(team: dict) -> list[str]:
+    """The followed team's two colours as "#rrggbb", primary first. Either may be missing."""
+    out = []
+    for key in ("color", "alternateColor"):
+        value = str(team.get(key) or "").lstrip("#").lower()
+        if len(value) == 6 and all(c in "0123456789abcdef" for c in value):
+            out.append("#" + value)
+    return out
+
+
 def fetch_schedule(league: str, team: str) -> list[dict]:
     resp = requests.get(
         f"{BASE}/{league}/teams/{team}/schedule", headers=HEADERS, timeout=20
@@ -65,10 +75,20 @@ def fetch_schedule(league: str, team: str) -> list[dict]:
     resp.raise_for_status()
     body = resp.json()
     abbr = body.get("team", {}).get("abbreviation", "")
+    colors = team_colors(body.get("team", {}))
+    try:  # the schedule lists only the primary colour; the team page has both
+        page = requests.get(
+            f"{BASE}/{league}/teams/{team}", headers=HEADERS, timeout=20
+        )
+        page.raise_for_status()
+        colors = team_colors(page.json().get("team", {})) or colors
+    except Exception:
+        pass
     games = []
     for event in body.get("events", []):
         game = parse_game(event["id"], event["date"], event["competitions"][0])
         game["mine"] = "home" if game["home"]["abbr"] == abbr else "away"
+        game["colors"] = colors
         games.append(game)
     return games
 
@@ -90,6 +110,7 @@ def fetch_live(league: str, game: dict) -> dict:
         fresh[side]["name"] = fresh[side]["name"] or game[side]["name"]
     fresh["tv"] = fresh["tv"] or game["tv"]
     fresh["mine"] = game["mine"]
+    fresh["colors"] = game.get("colors", [])
     return fresh
 
 
@@ -231,6 +252,7 @@ def chip(game: dict, now: datetime) -> dict:
         "line1": f"{away['abbr']} @ {home['abbr']}",
         "line2": line2,
         "tv": game["tv"],
+        "colors": game.get("colors", []),  # the followed team's colours, for a stripe
     }
 
 

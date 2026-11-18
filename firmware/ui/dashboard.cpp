@@ -11,6 +11,7 @@ namespace {
 
 constexpr int MAX_TITLE_LINES = 3;
 constexpr size_t MAX_CHIPS = 3;
+constexpr int CHIP_H = 52;
 // The game cards and the snow tile share one column, so their edges line up.
 constexpr int SIDE_X = 400, SIDE_W = 148;
 
@@ -23,11 +24,12 @@ lv_obj_t *date_lbl, *time_lbl, *ampm_lbl;
 lv_obj_t *news_box, *news_src, *news_head, *news_pager;
 lv_obj_t *chips_box, *snow_box;
 lv_obj_t *today_hdr, *list;
-lv_obj_t *cur_icon, *cur_temp, *cur_cond, *cur_hl, *cur_air, *hour_box;
+lv_obj_t *strip_box, *cur_icon, *cur_temp, *cur_cond, *cur_hl, *cur_air, *hour_box;
 lv_obj_t *sunrise_lbl, *sunset_lbl, *moon, *moon_lbl;
 
 Model model;
 size_t news_index = 0, game_index = 0;
+uint32_t last_scroll = 0;
 std::string status_text = "Connecting to the server…";
 
 void show_headline() {
@@ -55,20 +57,21 @@ void show_games() {
         const Game& game = model.games[(game_index + i) % count];
         bool live = game.state == "in";
         lv_obj_t* chip = make_box(chips_box);
-        lv_obj_set_size(chip, lv_pct(100), LV_SIZE_CONTENT);
-        lv_obj_set_flex_flow(chip, LV_FLEX_FLOW_COLUMN);
-        tint(chip, live ? C_LIVE_TOP : C_GAME_TOP, live ? C_LIVE_BOTTOM : C_GAME_BOTTOM);
+        lv_obj_set_size(chip, lv_pct(100), CHIP_H);
+        tint(chip, live ? C_LIVE_TILE : C_GAME_TILE);
         lv_obj_set_style_radius(chip, 8, 0);
-        lv_obj_set_style_pad_hor(chip, 10, 0);
-        lv_obj_set_style_pad_ver(chip, 5, 0);
-        if (live) {  // a game in progress gets a red edge
-            lv_obj_set_style_border_side(chip, LV_BORDER_SIDE_LEFT, 0);
-            lv_obj_set_style_border_width(chip, 3, 0);
-            lv_obj_set_style_border_color(chip, col(C_RED), 0);
+        lv_obj_set_style_clip_corner(chip, true, 0);
+        int text_x = 10;
+        for (int c = 0; c < game.color_count; c++) {  // team colours down the left edge
+            lv_obj_t* bar = make_box(chip);
+            lv_obj_set_pos(bar, c * 5, 0);
+            lv_obj_set_size(bar, 5, CHIP_H);
+            tint(bar, game.colors[c]);
+            text_x = (c + 1) * 5 + 9;
         }
-        make_label(chip, &font_text_16, C_MUTED, game.line1.c_str());
-        make_label(chip, &font_text_16, live ? C_RED_TEXT : game.state == "post" ? C_TEXT : C_DIM,
-                   game.line2.c_str());
+        lv_obj_set_pos(make_label(chip, &font_text_16, C_MUTED, game.line1.c_str()), text_x, 6);
+        uint32_t hex = live ? C_RED_TEXT : game.state == "post" ? C_TEXT : C_DIM;
+        lv_obj_set_pos(make_label(chip, &font_text_16, hex, game.line2.c_str()), text_x, 26);
     }
 }
 
@@ -115,7 +118,7 @@ void add_note(const char* text, uint32_t hex, const lv_font_t* font = &font_text
 }
 
 // One agenda line. Returns the row so the caller can check that it fitted.
-lv_obj_t* add_row(const Event& e) {
+lv_obj_t* add_row(const Event& e, bool shaded) {
     bool now = e.status == "now", soon = e.status == "soon";
     const int line = lv_font_get_line_height(&font_text_20);
 
@@ -127,6 +130,7 @@ lv_obj_t* add_row(const Event& e) {
     lv_obj_set_style_pad_ver(row, 9, 0);
     lv_obj_set_style_pad_column(row, 10, 0);
     lv_obj_set_style_radius(row, 10, 0);
+    if (shaded) tint(row, C_ROW_ALT);
     lv_obj_set_style_border_width(row, 2, 0);
     lv_obj_set_style_border_color(row, col(C_AMBER), 0);
     lv_obj_set_style_border_opa(row, soon ? LV_OPA_COVER : LV_OPA_TRANSP, 0);  // starts soon: outline
@@ -180,24 +184,8 @@ lv_obj_t* add_row(const Event& e) {
     return row;
 }
 
-// Adds rows until the list is full. Returns how many were shown.
-int add_rows(const std::vector<const Event*>& events, int reserve) {
-    int shown = 0;
-    for (const Event* e : events) {
-        lv_obj_t* row = add_row(*e);
-        lv_obj_update_layout(list);
-        int bottom = lv_obj_get_y(row) + lv_obj_get_height(row);
-        bool last = shown + 1 == (int)events.size();
-        if (bottom > lv_obj_get_height(list) - (last ? 0 : reserve) && shown > 0) {
-            lv_obj_delete(row);
-            break;
-        }
-        shown++;
-    }
-    return shown;
-}
-
 void show_agenda() {
+    int scroll = lv_obj_get_scroll_y(list);  // keep the reader's place across a refresh
     lv_obj_clean(list);
     std::string header = "Today";
     for (const std::string& name : model.all_day) header += "  ·  " + name;
@@ -207,37 +195,39 @@ void show_agenda() {
         add_note("Add a calendar link on the server's setup page.", C_MUTED);
         return;
     }
-    std::vector<const Event*> left;
+    int shown = 0;
     for (const Event& e : model.events) {
-        if (e.status != "past") left.push_back(&e);
+        if (e.status != "past") add_row(e, shown++ % 2 == 1);
     }
-    const int NOTE = 34;  // room kept for one line of small text under the rows
-    if (!left.empty()) {
-        int shown = add_rows(left, NOTE);
-        if ((int)left.size() > shown) {
-            char more[32];
-            snprintf(more, sizeof more, "+ %d more", (int)left.size() - shown);
-            add_note(more, C_DIM, &font_text_16);
-        } else if (!model.free_after.empty()) {
-            lv_obj_update_layout(list);
-            lv_obj_t* last = lv_obj_get_child(list, -1);
-            if (lv_obj_get_y(last) + lv_obj_get_height(last) + NOTE <= lv_obj_get_height(list)) {
-                add_note(("Free after " + model.free_after).c_str(), C_GREEN);
+    if (shown > 0) {
+        if (!model.free_after.empty()) add_note(("Free after " + model.free_after).c_str(), C_GREEN);
+    } else {
+        add_note(model.events.empty() ? "No meetings today" : "Nothing else today", C_GREEN);
+        if (!model.tomorrow.empty()) {
+            add_note("Tomorrow", C_DIM);
+            int index = 0;
+            for (Event e : model.tomorrow) {
+                e.status = "upcoming";
+                add_row(e, index++ % 2 == 1);
             }
         }
-        return;
     }
-    add_note(model.events.empty() ? "No meetings today" : "Nothing else today", C_GREEN);
-    if (!model.tomorrow.empty()) {
-        add_note("Tomorrow", C_DIM);
-        std::vector<Event> plain(model.tomorrow);
-        std::vector<const Event*> next;
-        for (Event& e : plain) {
-            e.status = "upcoming";
-            next.push_back(&e);
-        }
-        add_rows(next, 0);
-    }
+    lv_obj_update_layout(list);
+    lv_obj_scroll_to_y(list, scroll, LV_ANIM_OFF);
+}
+
+// The strip takes a hint of colour from the conditions: warm when clear, blue in rain,
+// indigo on a clear night, and so on.
+uint32_t weather_tone(const std::string& icon) {
+    if (icon == "clear") return 0x2B2210;
+    if (icon == "partly") return 0x242318;
+    if (icon == "clear-night") return 0x13152C;
+    if (icon == "partly-night") return 0x161A2B;
+    if (icon == "rain" || icon == "drizzle") return 0x0F2030;
+    if (icon == "snow") return 0x1B2A35;
+    if (icon == "storm") return 0x1F1932;
+    if (icon == "fog") return 0x1D1D1C;
+    return 0x1A1F25;  // cloudy
 }
 
 void show_weather() {
@@ -249,6 +239,7 @@ void show_weather() {
         return;
     }
     icon_set(cur_icon, model.icon.c_str());
+    tint(strip_box, weather_tone(model.icon));
     lv_label_set_text_fmt(cur_temp, "%d°", model.temp);
     lv_label_set_text(cur_cond, model.condition.c_str());
     if (model.has_today) {
@@ -320,7 +311,7 @@ void build(lv_obj_t* t) {
     news_box = make_box(t);
     lv_obj_set_pos(news_box, 28, NEWS_Y);
     lv_obj_set_size(news_box, SIDE_X + SIDE_W - 28, NEWS_H);
-    tint(news_box, C_NEWS_TOP, C_NEWS_BOTTOM);
+    tint(news_box, C_NEWS_TILE);
     lv_obj_set_style_radius(news_box, 14, 0);
     lv_obj_set_style_pad_all(news_box, 18, 0);
     news_src = make_label(news_box, &font_text_18, C_BLUE, "News");
@@ -338,7 +329,7 @@ void build(lv_obj_t* t) {
     lv_obj_set_size(snow_box, SIDE_W, NEWS_H);
     lv_obj_set_pos(snow_box, SIDE_X, NEWS_Y);
     lv_obj_set_flex_flow(snow_box, LV_FLEX_FLOW_COLUMN);
-    tint(snow_box, C_SNOW_TOP, C_SNOW_BOTTOM);
+    tint(snow_box, C_SNOW_TILE);
     lv_obj_set_style_radius(snow_box, 14, 0);
     lv_obj_set_style_pad_all(snow_box, 12, 0);
     lv_obj_add_flag(snow_box, LV_OBJ_FLAG_HIDDEN);
@@ -355,10 +346,21 @@ void build(lv_obj_t* t) {
     lv_obj_set_size(list, SCREEN_W - SPLIT - 24, STRIP_Y - 60);
     lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(list, 4, 0);
+    lv_obj_set_style_pad_bottom(list, 10, 0);
+    lv_obj_set_style_pad_right(list, 10, 0);  // keeps rows clear of the scroll bar
+    // A long day scrolls up and down by touch; a thin bar shows there is more.
+    lv_obj_add_flag(list, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scroll_dir(list, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_AUTO);
+    lv_obj_set_style_bg_color(list, col(C_FAINT), LV_PART_SCROLLBAR);
+    lv_obj_set_style_bg_opa(list, LV_OPA_COVER, LV_PART_SCROLLBAR);
+    lv_obj_set_style_width(list, 4, LV_PART_SCROLLBAR);
+    lv_obj_set_style_radius(list, 2, LV_PART_SCROLLBAR);
+    lv_obj_add_event_cb(list, [](lv_event_t*) { last_scroll = lv_tick_get(); }, LV_EVENT_SCROLL, nullptr);
 
     // Bottom: weather strip
     rule(t, 0, STRIP_Y, SCREEN_W, 1);
-    lv_obj_t* strip = make_box(t);
+    lv_obj_t* strip = strip_box = make_box(t);
     lv_obj_set_pos(strip, 0, STRIP_Y + 1);
     lv_obj_set_size(strip, SCREEN_W, SCREEN_H - STRIP_Y - 1);
 
@@ -409,6 +411,10 @@ void set_status(const char* text) {
 }
 
 void tick() {
+    // Left scrolled down and untouched for a minute: go back to what is next.
+    if (lv_obj_get_scroll_y(list) > 0 && lv_tick_elaps(last_scroll) > 60000) {
+        lv_obj_scroll_to_y(list, 0, LV_ANIM_ON);
+    }
     struct tm now;
     if (!app::local_time(now)) return;
     char text[48];

@@ -43,22 +43,16 @@ static inline lv_obj_t* make_label(lv_obj_t* parent, const lv_font_t* font, uint
     return label;
 }
 
-// Tile colours: each kind of tile gets its own dark tint, lighter at the top, so the screen
-// is not one flat grey. Kept subtle; on a 16-bit panel a strong dark gradient shows bands.
-#define C_NEWS_TOP 0x1F2B3A
-#define C_NEWS_BOTTOM 0x141B25
-#define C_SNOW_TOP 0x17323F
-#define C_SNOW_BOTTOM 0x0F212B
-#define C_GAME_TOP 0x2A2620
-#define C_GAME_BOTTOM 0x1C1A16
-#define C_LIVE_TOP 0x3D1F1F
-#define C_LIVE_BOTTOM 0x241414
+// Tile colours: each kind of tile has its own flat dark tint, so the screen is not one grey.
+// Flat on purpose: on a 16-bit panel a dark gradient shows visible bands.
+#define C_NEWS_TILE 0x18222E
+#define C_SNOW_TILE 0x122A36
+#define C_GAME_TILE 0x23201B
+#define C_LIVE_TILE 0x331A1A
+#define C_ROW_ALT 0x151514  // every other agenda row, barely lighter than the background
 
-// Fills a tile with a soft top-to-bottom tint.
-static inline void tint(lv_obj_t* obj, uint32_t top, uint32_t bottom) {
-    lv_obj_set_style_bg_color(obj, lv_color_hex(top), 0);
-    lv_obj_set_style_bg_grad_color(obj, lv_color_hex(bottom), 0);
-    lv_obj_set_style_bg_grad_dir(obj, LV_GRAD_DIR_VER, 0);
+static inline void tint(lv_obj_t* obj, uint32_t hex) {
+    lv_obj_set_style_bg_color(obj, lv_color_hex(hex), 0);
     lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, 0);
 }
 

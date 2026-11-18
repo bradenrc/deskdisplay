@@ -1,6 +1,7 @@
 // The data the dashboard shows, parsed from the server's /api/dashboard JSON.
 #pragma once
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -24,6 +25,8 @@ struct NewsItem {
 // A game, small enough to sit beside the clock: "IU @ WASH" over "Sat 1:30 pm" or "17–24 · 3rd 8:42".
 struct Game {
     std::string state, line1, line2;  // state: pre | in | post
+    uint32_t colors[2] = {0, 0};      // the followed team's colours
+    int color_count = 0;
 };
 
 // Fresh snow at a ski area: 4" over "+2" by tomorrow".

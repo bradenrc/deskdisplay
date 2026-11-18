@@ -2,10 +2,11 @@ import shutil
 from pathlib import Path
 
 import pytest
-from app.main import create_app
-from app.photos import Library
 from fastapi.testclient import TestClient
 from PIL import Image
+
+from app.main import create_app
+from app.photos import Library
 
 SECRET_LINK = "https://calendar.google.com/calendar/ical/me%40example.com/private-abcdef123456/basic.ics"
 FOLDER = "1AbCdEfGhIjKlMnOpQrStUvWxYz012345"
