@@ -262,6 +262,8 @@ class Library:
         catalog = {
             _pool_id(item["id"]): item
             for item in self._catalog(source, folder_id, index_hours, now)
+            # macOS leaves "._name.jpg" companion files beside photos; they are not images
+            if not Path(item["path"]).name.startswith(".")
         }
         self.catalog_size = len(catalog)
         state = self._read(self.pool_path, {})

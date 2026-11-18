@@ -37,6 +37,7 @@ class FakeDrive:
                 root / "Trip" / f"p{n:03d}.jpg"
             )
         (root / "Trip" / "broken.jpg").write_text("not really a jpeg")
+        (root / "Trip" / "._p000.jpg").write_text("macOS companion file")
 
     def list_images(self, folder_id):
         self.lists += 1
@@ -116,6 +117,7 @@ def test_pool_keeps_a_fixed_sample_and_rotates_daily(tmp_path):
         == 25
     )
     assert library.catalog_size == 61 and drive.lists == 1
+    assert "Trip/._p000.jpg" not in drive.copied  # hidden companion files are ignored
     first = {e["id"] for e in library.entries()}
     assert len(list(library.masters.glob("*.jpg"))) == 25
     assert not library.incoming.exists()  # originals are not kept
