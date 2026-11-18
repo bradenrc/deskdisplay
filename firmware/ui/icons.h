@@ -1,4 +1,4 @@
-// Small icons drawn from circles, lines and arcs, so no icon font or image files are needed.
+// Weather icons (small generated pictures) and the moon.
 #pragma once
 #include "lvgl.h"
 

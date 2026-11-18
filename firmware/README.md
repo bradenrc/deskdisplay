@@ -65,7 +65,8 @@ millisecond clock, and a large-buffer allocator. The simulator's versions are in
   seconds while it is the visible page, and decodes the JPEG into one full-screen buffer.
 - **Aquarium** (`ui/aquarium.cpp`) paints the scenery once and moves small fish and bubble
   objects over it, so only the areas around them are redrawn.
-- **Icons** (`ui/icons.cpp`) are drawn from circles, lines and arcs. There is no icon font.
+- **Weather icons** (`ui/icons.cpp`) are small shaded pictures stored in
+  `ui/weather_icons.c`. `tools/make_weather_icons.py` draws and regenerates them.
 - **The moon** (`ui/moon.cpp`) is one small texture of the moon's face, lit differently for
   each phase. `tools/make_moon.py` regenerates the texture.
 
