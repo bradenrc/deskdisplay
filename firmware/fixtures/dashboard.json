@@ -18,7 +18,8 @@
         "end_ampm": "am",
         "status": "past",
         "minutes_until": null,
-        "minutes_left": null
+        "minutes_left": null,
+        "travel": null
       },
       {
         "title": "Weekly sync",
@@ -31,7 +32,8 @@
         "end_ampm": "am",
         "status": "now",
         "minutes_until": null,
-        "minutes_left": 8
+        "minutes_left": 8,
+        "travel": null
       },
       {
         "title": "Design review with the platform team",
@@ -44,11 +46,12 @@
         "end_ampm": "am",
         "status": "soon",
         "minutes_until": 8,
-        "minutes_left": null
+        "minutes_left": null,
+        "travel": null
       },
       {
-        "title": "Lunch with Sam and the visiting customer success team from Seattle at the new place downtown",
-        "location": "",
+        "title": "Lunch with Sam",
+        "location": "800 W Main St, Boise",
         "start": 1794857400,
         "end": 1794861000,
         "start_label": "12:30",
@@ -57,7 +60,14 @@
         "end_ampm": "pm",
         "status": "upcoming",
         "minutes_until": 98,
-        "minutes_left": null
+        "minutes_left": null,
+        "travel": {
+          "drive_minutes": 19,
+          "leave": 1794855960,
+          "leave_label": "12:06",
+          "leave_ampm": "pm",
+          "urgency": "later"
+        }
       },
       {
         "title": "1:1 with manager",
@@ -70,7 +80,8 @@
         "end_ampm": "pm",
         "status": "upcoming",
         "minutes_until": 188,
-        "minutes_left": null
+        "minutes_left": null,
+        "travel": null
       },
       {
         "title": "Sprint planning",
@@ -83,7 +94,8 @@
         "end_ampm": "pm",
         "status": "upcoming",
         "minutes_until": 338,
-        "minutes_left": null
+        "minutes_left": null,
+        "travel": null
       }
     ],
     "all_day": [],
@@ -99,7 +111,8 @@
         "end_ampm": "am",
         "status": "now",
         "minutes_until": null,
-        "minutes_left": 8
+        "minutes_left": 8,
+        "travel": null
       }
     ],
     "next": {
@@ -113,7 +126,8 @@
       "end_ampm": "am",
       "status": "soon",
       "minutes_until": 8,
-      "minutes_left": null
+      "minutes_left": null,
+      "travel": null
     },
     "remaining": 5,
     "free_after": {
@@ -133,7 +147,8 @@
         "end_ampm": "am",
         "status": "upcoming",
         "minutes_until": 1328,
-        "minutes_left": null
+        "minutes_left": null,
+        "travel": null
       }
     ],
     "tomorrow_total": 1
@@ -185,7 +200,12 @@
     "sunrise": 1794839880.0,
     "sunrise_label": "7:38",
     "sunset": 1794874680.0,
-    "sunset_label": "5:18"
+    "sunset_label": "5:18",
+    "air": {
+      "value": 42,
+      "label": "Good",
+      "level": 0
+    }
   },
   "moon": {
     "phase": 0.231,
@@ -198,30 +218,43 @@
       "source": "Example News",
       "published": 1794850800.0,
       "summary": "",
-      "age": "12 min ago"
+      "age": "12 min ago",
+      "kind": "news"
+    },
+    {
+      "title": "4\" of new snow in the last 24 hours, 3\" more expected by this time tomorrow. 24° on the mountain.",
+      "source": "Bogus Basin",
+      "age": "Snow forecast",
+      "published": null,
+      "summary": "",
+      "kind": "snow"
     },
     {
       "title": "Chip maker announces new low-power radio for small devices",
       "source": "Example Tech",
       "published": 1794849120.0,
       "summary": "",
-      "age": "40 min ago"
+      "age": "40 min ago",
+      "kind": "news"
     },
     {
       "title": "Storm system expected to arrive midweek, bringing the season’s first snow",
       "source": "Example Weather",
       "published": 1794847620.0,
       "summary": "",
-      "age": "1 hr ago"
+      "age": "1 hr ago",
+      "kind": "news"
     },
     {
       "title": "Local team wins in overtime",
       "source": "Example Sports",
       "published": 1794843720.0,
       "summary": "",
-      "age": "2 hr ago"
+      "age": "2 hr ago",
+      "kind": "news"
     }
   ],
+  "night": false,
   "photos": {
     "count": 1
   }

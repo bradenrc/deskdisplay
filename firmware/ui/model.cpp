@@ -10,6 +10,17 @@ static Event read_event(JsonObjectConst e) {
     ev.status = e["status"] | "upcoming";
     ev.minutes_until = e["minutes_until"] | -1;
     ev.minutes_left = e["minutes_left"] | -1;
+    JsonObjectConst travel = e["travel"];
+    if (!travel.isNull()) {
+        ev.leave_urgency = travel["urgency"] | "later";
+        std::string drive = std::to_string(travel["drive_minutes"] | 0) + " min drive";
+        if (ev.leave_urgency == "now") {
+            ev.leave = "Leave now  ·  " + drive;
+        } else {
+            ev.leave = std::string("Leave by ") + (travel["leave_label"] | "") + " " +
+                       (travel["leave_ampm"] | "") + "  ·  " + drive;
+        }
+    }
     return ev;
 }
 
@@ -47,6 +58,13 @@ bool parse_model(const char* json, size_t len, Model& out) {
             m.sunrise = weather["sunrise_label"] | "";
             m.sunset = weather["sunset_label"] | "";
         }
+        JsonObjectConst air = weather["air"];
+        if (!air.isNull()) {
+            m.has_air = true;
+            m.aqi = air["value"] | 0;
+            m.aqi_level = air["level"] | 0;
+            m.aqi_label = air["label"] | "";
+        }
         for (JsonObjectConst h : weather["hourly"].as<JsonArrayConst>()) {
             Hour hour;
             hour.label = h["label"] | "";
@@ -67,6 +85,7 @@ bool parse_model(const char* json, size_t len, Model& out) {
         if (!item.title.empty()) m.news.push_back(item);
     }
     m.photo_count = doc["photos"]["count"] | 0;
+    m.night = doc["night"] | false;
 
     m.valid = true;
     out = m;

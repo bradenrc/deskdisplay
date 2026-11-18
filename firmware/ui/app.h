@@ -12,6 +12,7 @@ void show_page(int index);  // 0 dashboard, 1 photo frame, 2 aquarium
 int active_page();
 bool local_time(struct tm& out);            // false until the first reply from the server
 void clock_text(char* out, size_t n, const char** ampm = nullptr);  // "10:52"
+void force_night(bool on);  // show the night clock regardless of the hour (simulator)
 }  // namespace app
 
 namespace dashboard {

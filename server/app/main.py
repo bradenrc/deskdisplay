@@ -13,10 +13,11 @@ from zoneinfo import ZoneInfo
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 
-from . import agenda, astro, config, ical, news, weather
+from . import agenda, astro, config, ical, news, night, snow, weather
 from .jobs import Runner, Skip, Store
 from .photos import Library
 from .rclone import Rclone
+from .travel import Travel
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
@@ -31,6 +32,16 @@ class Core:
         self.store = Store()
         self.settings = config.Settings(data_dir / "settings.json")
         self.library = Library(data_dir / "photos")
+        loc = cfg["location"]
+        self.travel = (
+            Travel(
+                data_dir / "travel_cache.json",
+                (loc["latitude"], loc["longitude"]),
+                cfg["travel"]["max_miles"],
+            )
+            if cfg["travel"]["enabled"]
+            else None
+        )
         self.runner = Runner(
             self.store,
             [
@@ -38,6 +49,11 @@ class Core:
                 ("news", self.job_news, cfg["news"]["refresh_minutes"]),
                 ("agenda", self.job_agenda, cfg["agenda"]["refresh_minutes"]),
                 ("photos", self.job_photos, cfg["photos"]["refresh_minutes"]),
+                *(
+                    [("ski", self.job_ski, cfg["ski"]["refresh_minutes"])]
+                    if cfg["ski"]["resorts"]
+                    else []
+                ),
             ],
         )
         self.drive = Rclone(
@@ -68,6 +84,29 @@ class Core:
                 self.cfg["units"],
             ),
         )
+        try:  # air quality is a bonus: never let it take the weather down with it
+            self.store.set(
+                "air",
+                weather.fetch_air(
+                    loc["latitude"], loc["longitude"], self.cfg["timezone"]
+                ),
+            )
+        except Exception as exc:
+            self.store.note("air", "error", str(exc)[:200])
+
+    def job_ski(self) -> None:
+        reports, failures = [], 0
+        for resort in self.cfg["ski"]["resorts"]:
+            try:
+                reports.append(
+                    snow.fetch(resort, self.cfg["timezone"], self.cfg["units"])
+                )
+            except Exception:
+                failures += 1
+        if reports:
+            self.store.set("ski", reports)
+        if failures:
+            raise RuntimeError(f"{failures} ski area(s) could not be read")
 
     def job_news(self) -> None:
         self.store.set(
@@ -79,7 +118,10 @@ class Core:
         if not urls:
             self.store.drop("agenda")
             raise Skip("No calendar link added yet")
-        self.store.set("agenda", ical.fetch(urls, self.tz))
+        events = ical.fetch(urls, self.tz)
+        if self.travel:
+            self.travel.annotate(events)
+        self.store.set("agenda", events)
 
     def job_photos(self) -> None:
         photos_cfg = self.cfg["photos"]
@@ -109,6 +151,19 @@ class Core:
     def dashboard(self) -> dict:
         now = datetime.now(self.tz)
         events = self.store.get("agenda")
+        forecast = weather.view(
+            self.store.get("weather"),
+            now,
+            self.cfg["weather"]["hourly_step"],
+            self.cfg["weather"]["hourly_count"],
+        )
+        if forecast is not None:
+            forecast["air"] = weather.air_view(self.store.get("air"))
+        cards = [
+            card
+            for report in self.store.get("ski") or []
+            if (card := snow.card(report, now, self.cfg["ski"]["months"]))
+        ]
         return {
             "time": {
                 "epoch": int(now.timestamp()),
@@ -119,16 +174,17 @@ class Core:
             "agenda": (
                 None
                 if events is None
-                else agenda.build(events, now, self.cfg["agenda"]["soon_minutes"])
+                else agenda.build(
+                    events,
+                    now,
+                    self.cfg["agenda"]["soon_minutes"],
+                    travel=self.cfg["travel"] if self.travel else None,
+                )
             ),
-            "weather": weather.view(
-                self.store.get("weather"),
-                now,
-                self.cfg["weather"]["hourly_step"],
-                self.cfg["weather"]["hourly_count"],
-            ),
+            "weather": forecast,
             "moon": astro.moon(now),
-            "news": news.view(self.store.get("news"), now.timestamp()),
+            "news": news.mix(news.view(self.store.get("news"), now.timestamp()), cards),
+            "night": night.active(now, self.cfg["night"]),
             "photos": {"count": self.library.count()},
         }
 

@@ -8,6 +8,8 @@ struct Event {
     std::string title, start_label, start_ampm, status;  // status: past | now | soon | upcoming
     int minutes_until = -1;
     int minutes_left = -1;
+    std::string leave;          // e.g. "Leave by 1:34 pm  ·  21 min drive"; empty if no drive
+    std::string leave_urgency;  // later | soon | now
 };
 
 struct Hour {
@@ -35,12 +37,16 @@ struct Model {
     int temp = 0, high = 0, low = 0;
     std::string condition, icon, sunrise, sunset;
     std::vector<Hour> hourly;
+    bool has_air = false;
+    int aqi = 0, aqi_level = 0;  // level 0 (good) to 5 (hazardous)
+    std::string aqi_label;
 
     float moon_phase = 0;  // 0 new, 0.5 full
     std::string moon_name;
 
     std::vector<NewsItem> news;
     int photo_count = 0;
+    bool night = false;  // server says it is quiet hours
 };
 
 bool parse_model(const char* json, size_t len, Model& out);

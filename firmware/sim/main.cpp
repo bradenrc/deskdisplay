@@ -148,6 +148,12 @@ int screenshots(const std::string& dir) {
         if (!write_bmp(path, frame)) return 1;
         printf("wrote %s\n", path.c_str());
     }
+    app::show_page(0);
+    app::force_night(true);
+    pump(1300);
+    lv_refr_now(display);
+    if (!write_bmp(dir + "/night.bmp", frame)) return 1;
+    printf("wrote %s/night.bmp\n", dir.c_str());
     return 0;
 }
 

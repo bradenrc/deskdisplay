@@ -155,3 +155,41 @@ def view(raw: dict | None, now: datetime, step: int = 2, count: int = 5) -> dict
             }
         )
     return out
+
+
+AIR_URL = "https://air-quality-api.open-meteo.com/v1/air-quality"
+AQI_BANDS = [
+    (50, "Good"),
+    (100, "Moderate"),
+    (150, "Sensitive groups"),
+    (200, "Unhealthy"),
+    (300, "Very unhealthy"),
+    (10**6, "Hazardous"),
+]
+
+
+def fetch_air(latitude: float, longitude: float, timezone: str) -> dict:
+    resp = requests.get(
+        AIR_URL,
+        params={
+            "latitude": latitude,
+            "longitude": longitude,
+            "timezone": timezone,
+            "current": "us_aqi,pm2_5",
+        },
+        timeout=15,
+    )
+    resp.raise_for_status()
+    current = resp.json()["current"]
+    return {"aqi": current.get("us_aqi"), "pm25": current.get("pm2_5")}
+
+
+def air_view(raw: dict | None) -> dict | None:
+    """US air quality index with its standard category. `level` runs 0 (good) to 5."""
+    if not raw or raw.get("aqi") is None:
+        return None
+    value = round(raw["aqi"])
+    for level, (limit, label) in enumerate(AQI_BANDS):
+        if value <= limit:
+            return {"value": value, "label": label, "level": level}
+    return None

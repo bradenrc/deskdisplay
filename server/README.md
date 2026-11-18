@@ -66,6 +66,31 @@ small rotating pool on disk:
 A local folder can be used as well or instead: mount it in `docker-compose.yml` and set
 `photos.local_dir`. Local folders are shown in full.
 
+## Extras
+
+All of these are configured in `config/config.yaml`; the example file documents each one.
+
+- **Air quality.** The US air quality index for your location appears beside the weather,
+  coloured by category. No setup.
+- **Night mode.** Between `night.start` and `night.end` the screen shows a dim, plain
+  clock. Touching it brings the dashboard back for 10 minutes.
+- **Ski areas.** Each entry under `ski.resorts` adds a snow card that rotates with the
+  headlines: snowfall in the last 24 hours, the amount expected in the next 24, and the
+  temperature. Cards appear in the months listed in `ski.months`, and at any time snow is
+  falling or forecast. The figures are a weather-model estimate at the coordinates and
+  elevation you give, not the resort's own report, and there is no lift status.
+- **Leave-by times.** With `travel.enabled: true`, a meeting whose location is a street
+  address gets a line such as "Leave by 12:06 pm · 19 min drive", worked out from your
+  `location`. It turns amber when it is nearly time and red when you should already have
+  left. Read the privacy note below before enabling it.
+
+**Travel time and privacy.** Enabling it sends the location text of those meetings to
+OpenStreetMap's public address lookup and routing services. Only locations that look like
+street addresses are sent (never meeting links or room names), each is looked up once and
+cached in `data/travel_cache.json`, and places more than `travel.max_miles` away are
+ignored. Those services have no live traffic, so `travel.padding_percent` is added to
+every drive and `travel.buffer_minutes` on top.
+
 ## What the screen reads
 
 | Address | Returns |

@@ -16,6 +16,33 @@ weather:
   hourly_step: 2 # one forecast column every 2 hours
   hourly_count: 5
 
+# A dim, plain clock overnight. Touching the screen brings the dashboard back for 10 minutes.
+night:
+  enabled: true
+  start: "22:30"
+  end: "06:30"
+
+# "Leave by" hints for meetings whose location is a street address. This sends those
+# addresses to OpenStreetMap's public lookup services, so it is off unless you enable it.
+# There is no live traffic data: padding_percent is added to every drive time.
+travel:
+  enabled: false
+  buffer_minutes: 5
+  padding_percent: 15
+  max_miles: 150
+
+# Ski areas, shown as a snow card among the headlines in the colder months, or whenever
+# snow is falling or forecast. Figures are a weather-model estimate at the given point,
+# not the resort's own report.
+ski:
+  refresh_minutes: 60
+  months: [11, 12, 1, 2, 3, 4]
+  resorts: []
+    # - name: Bogus Basin
+    #   latitude: 43.764
+    #   longitude: -116.103
+    #   elevation_m: 2040 # mid-mountain
+
 news:
   refresh_minutes: 15
   max_items: 12

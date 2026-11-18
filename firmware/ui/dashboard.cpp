@@ -20,7 +20,7 @@ const char* const MONTHS[] = {"January", "February", "March",     "April",   "Ma
 lv_obj_t *date_lbl, *time_lbl, *ampm_lbl;
 lv_obj_t *news_src, *news_head, *news_pager;
 lv_obj_t *today_hdr, *list;
-lv_obj_t *cur_icon, *cur_temp, *cur_cond, *cur_hl, *hour_box;
+lv_obj_t *cur_icon, *cur_temp, *cur_cond, *cur_hl, *cur_air, *hour_box;
 lv_obj_t *sunrise_lbl, *sunset_lbl, *moon, *moon_lbl;
 
 Model model;
@@ -73,10 +73,25 @@ lv_obj_t* add_row(const Event& e) {
     lv_label_set_text_fmt(when, "%s %s", e.start_label.c_str(), e.start_ampm.c_str());
     lv_obj_set_width(when, 98);
 
+    // Title, with an optional "leave by" line under it.
+    lv_obj_t* middle = make_box(row);
+    lv_obj_set_flex_grow(middle, 1);
+    lv_obj_set_height(middle, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(middle, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(middle, 3, 0);
+
     // The title wraps instead of being cut off, up to MAX_TITLE_LINES.
-    lv_obj_t* title = make_label(row, &font_text_20, C_TEXT, e.title.c_str());
-    lv_obj_set_flex_grow(title, 1);
+    lv_obj_t* title = make_label(middle, &font_text_20, C_TEXT, e.title.c_str());
+    lv_obj_set_width(title, lv_pct(100));
     lv_label_set_long_mode(title, LV_LABEL_LONG_WRAP);
+
+    if (!e.leave.empty()) {
+        uint32_t hex = e.leave_urgency == "now" ? C_RED_TEXT : e.leave_urgency == "soon" ? C_AMBER_TEXT : C_DIM;
+        lv_obj_t* leave = make_label(middle, &font_text_16, hex, e.leave.c_str());
+        lv_obj_set_width(leave, lv_pct(100));
+        lv_label_set_long_mode(leave, LV_LABEL_LONG_DOT);
+        lv_obj_set_height(leave, lv_font_get_line_height(&font_text_16));
+    }
 
     if (now) {  // in progress: "Now" and a red dot
         lv_obj_t* tag = make_label(row, &font_text_16, C_RED_TEXT, "Now");
@@ -178,9 +193,20 @@ void show_weather() {
         lv_label_set_text(sunrise_lbl, model.sunrise.c_str());
         lv_label_set_text(sunset_lbl, model.sunset.c_str());
     }
+    static const uint32_t AIR_HEX[] = {C_GREEN, C_AMBER_TEXT, C_AMBER, C_RED_TEXT, 0xAFA9EC, 0xD4537E};
+    if (model.has_air) {
+        lv_label_set_text_fmt(cur_air, "AQI %d  ·  %s", model.aqi, model.aqi_label.c_str());
+        lv_obj_set_style_text_color(cur_air, col(AIR_HEX[LV_CLAMP(0, model.aqi_level, 5)]), 0);
+    } else {
+        lv_label_set_text(cur_air, "");
+    }
+    // Two or three lines of text beside the temperature.
     lv_obj_update_layout(cur_temp);
-    lv_obj_align_to(cur_cond, cur_temp, LV_ALIGN_OUT_RIGHT_TOP, 16, -1);
-    lv_obj_align_to(cur_hl, cur_temp, LV_ALIGN_OUT_RIGHT_BOTTOM, 16, 3);
+    int x = lv_obj_get_x(cur_temp) + lv_obj_get_width(cur_temp) + 16;
+    int top = model.has_air ? 27 : 39, step = 25;
+    lv_obj_set_pos(cur_cond, x, top);
+    lv_obj_set_pos(cur_hl, x, top + step);
+    lv_obj_set_pos(cur_air, x, top + step * 2);
 
     lv_obj_clean(hour_box);
     for (const Hour& h : model.hourly) {
@@ -260,6 +286,7 @@ void build(lv_obj_t* t) {
     lv_obj_set_pos(cur_temp, 108, 40);
     cur_cond = make_label(strip, &font_text_18, C_MUTED);
     cur_hl = make_label(strip, &font_text_18, C_MUTED);
+    cur_air = make_label(strip, &font_text_18, C_GREEN);
 
     hour_box = make_box(strip);
     lv_obj_set_pos(hour_box, 376, 12);

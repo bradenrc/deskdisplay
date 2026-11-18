@@ -21,6 +21,18 @@ DEFAULTS: dict[str, Any] = {
         "refresh_minutes": 5,
     },
     "weather": {"refresh_minutes": 15, "hourly_step": 2, "hourly_count": 5},
+    # A dim, plain clock overnight. Touching the screen brings the dashboard back for a while.
+    "night": {"enabled": True, "start": "22:30", "end": "06:30"},
+    # "Leave by" hints for meetings with a street address. Off by default because it sends
+    # those addresses to OpenStreetMap's public lookup services.
+    "travel": {
+        "enabled": False,
+        "buffer_minutes": 5,
+        "padding_percent": 15,
+        "max_miles": 150,
+    },
+    # Ski areas: [{name, latitude, longitude, elevation_m}]. Shown in the colder months.
+    "ski": {"resorts": [], "refresh_minutes": 60, "months": [11, 12, 1, 2, 3, 4]},
     "news": {
         "refresh_minutes": 15,
         "max_items": 12,

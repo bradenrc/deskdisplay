@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from app import agenda, astro, ical, news, weather
+from app import agenda, astro, ical, news, night, snow, travel, weather
 from app.photos import parse_folder_id
 from app.rclone import extract_token
 
@@ -249,3 +249,155 @@ def test_parse_folder_id():
     assert parse_folder_id("") == ""
     assert parse_folder_id("https://drive.google.com/drive/my-drive") == "root"
     assert parse_folder_id("root") == "root"
+
+
+def test_air_quality_bands():
+    assert weather.air_view({"aqi": 42}) == {"value": 42, "label": "Good", "level": 0}
+    assert weather.air_view({"aqi": 51})["label"] == "Moderate"
+    assert weather.air_view({"aqi": 135}) == {
+        "value": 135,
+        "label": "Sensitive groups",
+        "level": 2,
+    }
+    assert weather.air_view({"aqi": 420})["level"] == 5
+    assert weather.air_view(None) is None and weather.air_view({"aqi": None}) is None
+
+
+def test_night_hours():
+    cfg = {"enabled": True, "start": "22:30", "end": "06:30"}
+    assert (
+        night.active(at(23), cfg)
+        and night.active(at(2), cfg)
+        and night.active(at(22, 30), cfg)
+    )
+    assert not night.active(at(6, 30), cfg) and not night.active(at(12), cfg)
+    assert not night.active(at(22, 29), cfg)
+    assert not night.active(at(23), {**cfg, "enabled": False})
+    daytime = {"enabled": True, "start": "13:00", "end": "14:00"}
+    assert night.active(at(13, 30), daytime) and not night.active(at(14), daytime)
+
+
+def test_snow_card():
+    now = at(10)
+    hours = [
+        {
+            "time": (now + timedelta(hours=h)).timestamp(),
+            "snow": 0.5 if -6 < h <= 0 else 0.25 if 0 < h <= 12 else 0,
+            "temp": 24.4,
+        }
+        for h in range(-24, 48)
+    ]
+    raw = {"name": "Bogus Basin", "unit": '"', "hours": hours}
+    s = snow.summary(raw, now.timestamp())
+    assert s == {"recent": 3.0, "coming": 3.0, "temp": 24}
+    card = snow.card(raw, now, months=[11, 12, 1, 2, 3, 4])
+    assert card["source"] == "Bogus Basin" and card["kind"] == "snow"
+    assert (
+        card["title"]
+        == '3" of new snow in the last 24 hours, 3" more expected by this time tomorrow. 24° on the mountain.'
+    )
+    dry = {"name": "Brundage", "unit": '"', "hours": [{**h, "snow": 0} for h in hours]}
+    assert snow.card(dry, now, months=[11])["title"].startswith(
+        "No new snow in the last 24 hours, none expected"
+    )
+    assert (
+        snow.card(dry, datetime(2026, 7, 4, 10, tzinfo=TZ), months=[11]) is None
+    )  # summer: no card
+
+
+def test_news_mix():
+    heads = [{"title": f"h{i}"} for i in range(6)]
+    cards = [{"title": "bogus"}, {"title": "brundage"}]
+    assert [i["title"] for i in news.mix(heads, cards)] == [
+        "h0",
+        "bogus",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "brundage",
+        "h5",
+    ]
+    assert news.mix(heads, []) == heads
+    assert [i["title"] for i in news.mix([], cards)] == ["bogus", "brundage"]
+
+
+def test_travel_address_filter():
+    yes = [
+        "800 W Main St, Boise, ID 83702",
+        "1910 University Dr",
+        "2600 Bogus Basin Rd, Boise",
+    ]
+    no = [
+        "",
+        "Zoom",
+        "https://teams.microsoft.com/l/meetup-join/19",
+        "Room 4",
+        "Conference Room B",
+        "Microsoft Teams Meeting",
+        "Phone call 555-1234",
+        "Boise",
+    ]
+    assert all(travel.looks_like_address(t) for t in yes)
+    assert not any(travel.looks_like_address(t) for t in no)
+    assert (
+        300 < travel.miles_between((43.615, -116.2023), (47.6062, -122.3321)) < 420
+    )  # Boise to Seattle
+
+
+def test_travel_annotate_uses_cache_only_for_addresses(tmp_path):
+    planner = travel.Travel(tmp_path / "cache.json", (43.615, -116.2023))
+    calls = []
+    planner._lookup = lambda location: calls.append(location) or 18.0
+    now = at(9).timestamp()
+    events = [
+        {
+            "title": "Dentist",
+            "start": at(14).timestamp(),
+            "end": at(15).timestamp(),
+            "all_day": False,
+            "location": "800 W Main St, Boise",
+        },
+        {
+            "title": "Standup",
+            "start": at(10).timestamp(),
+            "end": at(10, 30).timestamp(),
+            "all_day": False,
+            "location": "Zoom",
+        },
+        {
+            "title": "Earlier",
+            "start": at(8).timestamp(),
+            "end": at(8, 30).timestamp(),
+            "all_day": False,
+            "location": "1 Old Rd, Boise",
+        },
+    ]
+    planner.annotate(events, now)
+    planner.annotate(events, now)
+    assert calls == [
+        "800 W Main St, Boise"
+    ]  # looked up once, then cached; others never sent
+    assert events[0]["drive_minutes"] == 18.0 and "drive_minutes" not in events[1]
+
+    opts = {"buffer_minutes": 5, "padding_percent": 15}
+    row = agenda.build(events, at(9), 10, travel=opts)["events"][-1]
+    assert row["travel"]["drive_minutes"] == 21  # 18 min padded 15% and rounded up
+    assert (
+        row["travel"]["leave_label"] == "1:34" and row["travel"]["urgency"] == "later"
+    )
+    assert (
+        agenda.build(events, at(13, 28), 10, travel=opts)["events"][-1]["travel"][
+            "urgency"
+        ]
+        == "soon"
+    )
+    assert (
+        agenda.build(events, at(13, 40), 10, travel=opts)["events"][-1]["travel"][
+            "urgency"
+        ]
+        == "now"
+    )
+    assert (
+        agenda.build(events, at(9), 10)["events"][-1]["travel"] is None
+    )  # feature off
