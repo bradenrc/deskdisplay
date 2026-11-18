@@ -36,7 +36,20 @@ log = logging.getLogger("deskpal.photos")
 
 IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif", ".bmp", ".gif"}
 ID_RE = re.compile(r"^[A-Za-z0-9_-]{10,}$")
-MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+MONTHS = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+]
 BATCH = 20
 EXIF_IFD, DATE_ORIGINAL, DATE_TIME = 0x8769, 36867, 306
 
@@ -235,11 +248,15 @@ class Library:
         master_max: int = 1920,
         today: str | None = None,
         now: float | None = None,
+        progress=None,
     ) -> int:
         """Keep `pool_size` photos from the Drive folder on disk, rotating some each day.
 
         `source` provides list_images(folder_id) and copy(folder_id, paths, dest).
+        `progress(text)` is called with a short human-readable note as work proceeds.
         """
+        progress = progress or (lambda text: None)
+        progress("Reading the list of photos in the Drive folder")
         now = time.time() if now is None else now
         today = today or time.strftime("%Y-%m-%d", time.localtime(now))
         catalog = {
@@ -259,24 +276,28 @@ class Library:
             for pid, e in pool.items()
             if pid in catalog and Path(e["path"]).exists()
         }
+        evicted: set[str] = set()
         if state.get("last_swap") != today:
             state["last_swap"] = today
             if len(keep) >= pool_size and len(catalog) > pool_size:
                 oldest = sorted(keep, key=lambda pid: keep[pid].get("added", 0))
-                for pid in oldest[: max(0, daily_swap)]:
-                    del keep[pid]
-        for pid in sorted(keep, key=lambda pid: keep[pid].get("added", 0))[
-            : max(0, len(keep) - pool_size)
-        ]:
-            del keep[pid]  # pool size was lowered
+                evicted.update(oldest[: max(0, daily_swap)])
+        by_age = sorted(keep, key=lambda pid: keep[pid].get("added", 0))
+        evicted.update(by_age[: max(0, len(keep) - pool_size)])  # pool size was lowered
+        for pid in evicted:
+            del keep[pid]
         self._replace_source("r_", keep)
 
-        candidates = [pid for pid in catalog if pid not in keep and pid not in bad]
+        skip = bad | evicted  # do not hand back a photo that was just rotated out
+        candidates = [pid for pid in catalog if pid not in keep and pid not in skip]
         random.shuffle(candidates)
-        chosen = candidates[: max(0, pool_size - len(keep))]
+        ready = len(keep)
         try:
-            for offset in range(0, len(chosen), BATCH):
-                batch = chosen[offset : offset + BATCH]
+            # Take picks in small batches until the pool is full; a file that turns out
+            # to be unreadable is skipped and another pick takes its place.
+            while ready < pool_size and candidates:
+                count = min(BATCH, pool_size - ready)
+                batch, candidates = candidates[:count], candidates[count:]
                 shutil.rmtree(self.incoming, ignore_errors=True)
                 self.incoming.mkdir(parents=True)
                 source.copy(
@@ -295,6 +316,10 @@ class Library:
                 with self._lock:
                     self._index.update(added)
                     self._write(self.index_path, self._index)
+                    ready = sum(1 for pid in self._index if pid.startswith("r_"))
+                target = min(pool_size, len(catalog) - len(bad))
+                if ready < target:
+                    progress(f"Downloading photos: {ready} of {target} ready")
         finally:
             shutil.rmtree(self.incoming, ignore_errors=True)
             state["bad"] = sorted(bad)[-5000:]

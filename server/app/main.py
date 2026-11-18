@@ -96,6 +96,7 @@ class Core:
                 daily_swap=photos_cfg["daily_swap"],
                 index_hours=photos_cfg["index_hours"],
                 master_max=photos_cfg["master_max_px"],
+                progress=lambda text: self.store.note("photos", "working", text),
             )
         self.store.set("photos", self.library.count())
         if folder and not connected:

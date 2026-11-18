@@ -177,9 +177,12 @@ def render(core, msg: str = "", err: str = "") -> str:
             parts.append(f"<tr><td>{title}</td><td class=muted>Starting…</td></tr>")
             continue
         css = {"ok": "ok", "error": "bad"}.get(meta["state"], "warn")
-        label = {"ok": "OK", "error": "Problem", "idle": "Waiting"}.get(
-            meta["state"], meta["state"]
-        )
+        label = {
+            "ok": "OK",
+            "error": "Problem",
+            "idle": "Waiting",
+            "working": "Working",
+        }.get(meta["state"], meta["state"])
         detail = f" · {escape(meta['detail'])}" if meta["detail"] else ""
         parts.append(
             f"<tr><td>{title}</td><td><span class='pill {css}' style='margin:0'>{label}</span>"

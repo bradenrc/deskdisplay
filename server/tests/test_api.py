@@ -166,6 +166,16 @@ def test_pool_keeps_a_fixed_sample_and_rotates_daily(tmp_path):
 def test_pool_skips_unreadable_files_and_small_folders(tmp_path):
     drive = FakeDrive(tmp_path / "drive", count=4)
     library = Library(tmp_path / "lib")
+    notes = []
+    big = FakeDrive(tmp_path / "big", count=45)
+    Library(tmp_path / "lib2").sync_pool(
+        big, FOLDER, pool_size=45, now=1.0, progress=notes.append
+    )
+    assert notes[0].startswith("Reading the list") and len(notes) >= 3
+    assert all(
+        n.startswith("Downloading photos: ") and n.endswith(" of 45 ready")
+        for n in notes[1:]
+    )
     assert library.sync_pool(drive, FOLDER, pool_size=25, today="d1", now=1.0) == 4
     tries = drive.copied.count("Trip/broken.jpg")
     library.sync_pool(drive, FOLDER, pool_size=25, today="d2", now=2.0)
