@@ -1,0 +1,7 @@
+# Secrets and downloaded data never belong in git
+data/
+config/config.yaml
+config/client_secret.json
+.venv/
+__pycache__/
+.pytest_cache/

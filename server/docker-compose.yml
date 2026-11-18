@@ -1,0 +1,14 @@
+services:
+  desk-companion:
+    build: .
+    image: desk-companion-server
+    container_name: desk-companion
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config:/config:ro
+      - ./data:/data
+      # Optional: a folder of photos on this machine, used alongside or instead of Drive.
+      # Also set photos.local_dir: /photos in config/config.yaml.
+      # - /path/to/photos:/photos:ro

@@ -1,0 +1,41 @@
+# Copy to config.yaml and edit. Every setting is optional; these are the defaults.
+
+# Your timezone (IANA name) and location for weather, sunrise and sunset.
+timezone: America/Denver
+location:
+  latitude: 39.74
+  longitude: -104.99
+units: fahrenheit # or celsius
+
+# Where Google sends the browser after sign-in. Google only allows
+# http://localhost:<port> or a real https:// address here. Leave this alone unless
+# you serve this container behind your own https domain.
+public_url: http://localhost:8080
+
+agenda:
+  soon_minutes: 10 # outline an event when it starts within this many minutes
+  refresh_minutes: 5
+  hide_declined: true
+
+weather:
+  refresh_minutes: 15
+  hourly_step: 2 # one forecast column every 2 hours
+  hourly_count: 5
+
+news:
+  refresh_minutes: 15
+  max_items: 12
+  feeds:
+    - name: NPR
+      url: https://feeds.npr.org/1001/rss.xml
+    - name: BBC
+      url: https://feeds.bbci.co.uk/news/rss.xml
+
+photos:
+  # The Drive folder is normally chosen on the setup page; this is the fallback.
+  drive_folder_id: ""
+  local_dir: "" # e.g. /photos, if you mount a folder in docker-compose.yml
+  refresh_minutes: 15
+  fit: cover # cover = fill the screen and crop; contain = whole photo with black bars
+  master_max_px: 1920 # Drive photos are shrunk to this before being stored
+  max_photos: 2000
