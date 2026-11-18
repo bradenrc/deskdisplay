@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 
-from . import agenda, astro, config, ical, news, night, snow, weather
+from . import agenda, astro, config, ical, news, night, snow, sports, weather
 from .jobs import Runner, Skip, Store
 from .photos import Library
 from .rclone import Rclone
@@ -42,6 +42,17 @@ class Core:
             if cfg["travel"]["enabled"]
             else None
         )
+        teams = cfg["sports"]["teams"]
+        self.sports = (
+            sports.Tracker(
+                teams,
+                cfg["sports"]["schedule_minutes"],
+                cfg["sports"]["preview_days"],
+                cfg["sports"]["final_hours"],
+            )
+            if teams
+            else None
+        )
         self.runner = Runner(
             self.store,
             [
@@ -54,6 +65,8 @@ class Core:
                     if cfg["ski"]["resorts"]
                     else []
                 ),
+                # checked every minute so a live score stays current; quiet otherwise
+                *([("sports", self.job_sports, 1)] if cfg["sports"]["teams"] else []),
             ],
         )
         self.drive = Rclone(
@@ -93,6 +106,12 @@ class Core:
             )
         except Exception as exc:
             self.store.note("air", "error", str(exc)[:200])
+
+    def job_sports(self) -> None:
+        failures = self.sports.refresh(time.time())
+        self.store.set("sports", True)
+        if failures:
+            raise RuntimeError(f"{failures} team(s) could not be read")
 
     def job_ski(self) -> None:
         reports, failures = [], 0
@@ -159,7 +178,7 @@ class Core:
         )
         if forecast is not None:
             forecast["air"] = weather.air_view(self.store.get("air"))
-        cards = [
+        cards = sports.cards(self.sports, now) + [
             card
             for report in self.store.get("ski") or []
             if (card := snow.card(report, now, self.cfg["ski"]["months"]))

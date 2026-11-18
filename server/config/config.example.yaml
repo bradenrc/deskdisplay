@@ -43,6 +43,16 @@ ski:
     #   longitude: -116.103
     #   elevation_m: 2040 # mid-mountain
 
+# Teams to follow. Each gets a card among the headlines in a week it plays: the next game,
+# then the live score (which stays on screen during the game), then the final.
+# league is nfl or college-football; team is ESPN's abbreviation or numeric id.
+sports:
+  preview_days: 6 # start showing the next game this many days ahead
+  final_hours: 36 # keep showing a final score this long
+  teams: []
+    # - {league: nfl, team: sea, name: Seahawks}
+    # - {league: college-football, team: "264", name: Washington}
+
 news:
   refresh_minutes: 15
   max_items: 12

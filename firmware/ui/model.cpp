@@ -82,6 +82,14 @@ bool parse_model(const char* json, size_t len, Model& out) {
         item.title = n["title"] | "";
         item.source = n["source"] | "";
         item.age = n["age"] | "";
+        item.kind = n["kind"] | "news";
+        item.state = n["state"] | "";
+        item.detail = n["detail"] | "";
+        item.tv = n["tv"] | "";
+        item.away_name = n["away"]["name"] | "";
+        item.home_name = n["home"]["name"] | "";
+        item.away_score = n["away"]["score"] | -1;
+        item.home_score = n["home"]["score"] | -1;
         if (!item.title.empty()) m.news.push_back(item);
     }
     m.photo_count = doc["photos"]["count"] | 0;

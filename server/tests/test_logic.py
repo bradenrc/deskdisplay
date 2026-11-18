@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from app import agenda, astro, ical, news, night, snow, travel, weather
+from app import agenda, astro, ical, news, night, snow, sports, travel, weather
 from app.photos import parse_folder_id
 from app.rclone import extract_token
 
@@ -401,3 +401,165 @@ def test_travel_annotate_uses_cache_only_for_addresses(tmp_path):
     assert (
         agenda.build(events, at(9), 10)["events"][-1]["travel"] is None
     )  # feature off
+
+
+def _competition(state, detail, home, away, tv="Fox"):
+    side = lambda where, abbr, name, score: {
+        "homeAway": where,
+        "score": score,
+        "team": {"abbreviation": abbr, "shortDisplayName": name},
+    }
+    return {
+        "status": {"type": {"state": state, "shortDetail": detail}},
+        "competitors": [side("home", *home), side("away", *away)],
+        "broadcasts": [{"media": {"shortName": tv}}] if tv else [],
+    }
+
+
+def test_sports_pick_and_cards():
+    team = {"league": "nfl", "team": "sea", "name": "Seahawks"}
+    now = at(10)  # Monday Nov 16, 10:00
+    iso = lambda dt: dt.astimezone(ZoneInfo("UTC")).strftime("%Y-%m-%dT%H:%MZ")
+    last = sports.parse_game(
+        "1",
+        iso(at(14, day=15)),
+        _competition(
+            "post",
+            "Final",
+            ("LV", "Raiders", {"displayValue": "13"}),
+            ("SEA", "Seahawks", {"displayValue": "21"}),
+            "CBS",
+        ),
+    )
+    nxt = sports.parse_game(
+        "2",
+        iso(at(15, day=21)),
+        _competition(
+            "pre",
+            "11/21 - 5:00 PM EST",
+            ("SEA", "Seahawks", None),
+            ("LAR", "Rams", None),
+        ),
+    )
+    far = sports.parse_game(
+        "3",
+        iso(at(15, day=30)),
+        _competition(
+            "pre", "TBD", ("PHI", "Eagles", None), ("SEA", "Seahawks", None), ""
+        ),
+    )
+    last["mine"], nxt["mine"], far["mine"] = "away", "home", "away"
+    assert (
+        last["home"]["score"] == 13
+        and last["away"]["score"] == 21
+        and not far["time_set"]
+    )
+    games = [last, nxt, far]
+
+    final = sports.pick(games, now.timestamp(), preview_days=6, final_hours=36)
+    assert final["id"] == "1"  # yesterday's final is still within 36 hours
+    c = sports.card(team, final, now)
+    assert (
+        c["title"] == "Seahawks 21, Raiders 13"
+        and c["age"] == "Final"
+        and c["state"] == "post"
+    )
+
+    later = at(
+        10, day=17
+    )  # Tuesday: the final has aged out, next game is within 6 days
+    upcoming = sports.pick(games, later.timestamp(), 6, 36)
+    assert upcoming["id"] == "2"
+    c = sports.card(team, upcoming, later)
+    assert (
+        c["title"] == "Seahawks vs Rams, Saturday at 3:00 pm on Fox"
+        and c["age"] == "Next game"
+    )
+    assert sports.card(team, upcoming, at(9, day=21))["title"].startswith(
+        "Seahawks vs Rams, today at 3:00 pm"
+    )
+    assert (
+        sports.card(team, far, at(9, day=29))["title"]
+        == "Seahawks at Eagles, tomorrow, time to be announced"
+    )
+    assert (
+        sports.pick([far], later.timestamp(), 6, 36) is None
+    )  # quiet week: nothing shown
+
+    live = dict(
+        nxt,
+        state="in",
+        detail="8:42 - 3rd",
+        home={**nxt["home"], "score": 17},
+        away={**nxt["away"], "score": 10},
+    )
+    assert (
+        sports.pick([last, live, far], now.timestamp(), 6, 36)["id"] == "2"
+    )  # live beats a recent final
+    c = sports.card(team, live, at(16, day=21))
+    assert (
+        c["title"] == "Rams 10, Seahawks 17"
+        and c["age"] == "Live"
+        and c["detail"] == "8:42 - 3rd"
+    )
+
+    assert sports.may_be_live(
+        nxt, at(14, 55, day=21).timestamp()
+    )  # five minutes before kickoff
+    assert sports.may_be_live(
+        nxt, at(17, day=21).timestamp()
+    )  # feed still says "pre" after kickoff
+    assert not sports.may_be_live(nxt, at(10, day=21).timestamp())
+    assert not sports.may_be_live(far, at(15, day=30).timestamp())  # time not set
+    assert not sports.may_be_live(last, now.timestamp()) and not sports.may_be_live(
+        None, 0
+    )
+
+
+def test_sports_tracker_polls_live_only_when_needed(monkeypatch):
+    kickoff = at(15, day=21)
+    game = sports.parse_game(
+        "2",
+        kickoff.astimezone(ZoneInfo("UTC")).strftime("%Y-%m-%dT%H:%MZ"),
+        _competition(
+            "pre",
+            "11/21 - 5:00 PM EST",
+            ("SEA", "Seahawks", None),
+            ("LAR", "Rams", None),
+        ),
+    )
+    game["mine"] = "home"
+    calls = {"schedule": 0, "live": 0}
+
+    def schedule(league, team):
+        calls["schedule"] += 1
+        return [dict(game)]
+
+    def live(league, current):
+        calls["live"] += 1
+        return dict(
+            current,
+            state="in",
+            detail="12:00 - 1st",
+            home={**current["home"], "score": 7},
+            away={**current["away"], "score": 0},
+        )
+
+    monkeypatch.setattr(sports, "fetch_schedule", schedule)
+    monkeypatch.setattr(sports, "fetch_live", live)
+    tracker = sports.Tracker(
+        [{"league": "nfl", "team": "sea", "name": "Seahawks"}], 60, 6, 36
+    )
+
+    quiet = at(10, day=18).timestamp()
+    assert tracker.refresh(quiet) == 0 and tracker.refresh(quiet + 60) == 0
+    assert calls == {
+        "schedule": 1,
+        "live": 0,
+    }  # schedule cached for an hour, no live polling midweek
+    assert sports.cards(tracker, at(10, day=18))[0]["age"] == "Next game"
+
+    tracker.refresh(kickoff.timestamp() + 300)
+    assert calls["live"] == 1
+    assert sports.cards(tracker, kickoff)[0]["title"] == "Rams 0, Seahawks 7"
+    assert sports.cards(None, kickoff) == []

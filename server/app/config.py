@@ -33,6 +33,13 @@ DEFAULTS: dict[str, Any] = {
     },
     # Ski areas: [{name, latitude, longitude, elevation_m}]. Shown in the colder months.
     "ski": {"resorts": [], "refresh_minutes": 60, "months": [11, 12, 1, 2, 3, 4]},
+    # Teams to follow: [{league: nfl | college-football, team: ESPN id or abbreviation, name}].
+    "sports": {
+        "teams": [],
+        "schedule_minutes": 60,
+        "preview_days": 6,
+        "final_hours": 36,
+    },
     "news": {
         "refresh_minutes": 15,
         "max_items": 12,

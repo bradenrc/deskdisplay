@@ -79,6 +79,11 @@ All of these are configured in `config/config.yaml`; the example file documents 
   temperature. Cards appear in the months listed in `ski.months`, and at any time snow is
   falling or forecast. The figures are a weather-model estimate at the coordinates and
   elevation you give, not the resort's own report, and there is no lift status.
+- **Sports.** Each team under `sports.teams` gets a card among the headlines in a week it
+  plays: the next game with its time and channel, then the live score, then the final.
+  A game in progress stays on screen instead of rotating, and its score is refreshed
+  every minute. Nothing is shown in a week without a game. Scores come from ESPN's public
+  feeds, which are unofficial and could change without notice.
 - **Leave-by times.** With `travel.enabled: true`, a meeting whose location is a street
   address gets a line such as "Leave by 12:06 pm · 19 min drive", worked out from your
   `location`. It turns amber when it is nearly time and red when you should already have

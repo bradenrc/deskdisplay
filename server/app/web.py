@@ -171,7 +171,11 @@ def render(core, msg: str = "", err: str = "") -> str:
         "weather": "Weather",
         "news": "News",
     }
-    for name, title in (("air", "Air quality"), ("ski", "Ski areas")):
+    for name, title in (
+        ("air", "Air quality"),
+        ("ski", "Ski areas"),
+        ("sports", "Sports"),
+    ):
         if name in status["sources"]:
             labels[name] = title
     for name, title in labels.items():

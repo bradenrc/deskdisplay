@@ -19,6 +19,12 @@ struct Hour {
 
 struct NewsItem {
     std::string title, source, age;
+    // Game cards (kind "game") also carry the score for the scoreboard layout.
+    std::string kind, state, detail, tv;  // state: pre | in | post
+    std::string away_name, home_name;
+    int away_score = -1, home_score = -1;
+    bool live() const { return kind == "game" && state == "in"; }
+    bool has_score() const { return kind == "game" && state != "pre"; }
 };
 
 struct Model {

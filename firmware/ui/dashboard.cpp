@@ -19,6 +19,7 @@ const char* const MONTHS[] = {"January", "February", "March",     "April",   "Ma
 
 lv_obj_t *date_lbl, *time_lbl, *ampm_lbl;
 lv_obj_t *news_src, *news_head, *news_pager;
+lv_obj_t *score_box, *score_name[2], *score_pts[2], *score_note;  // away, then home
 lv_obj_t *today_hdr, *list;
 lv_obj_t *cur_icon, *cur_temp, *cur_cond, *cur_hl, *cur_air, *hour_box;
 lv_obj_t *sunrise_lbl, *sunset_lbl, *moon, *moon_lbl;
@@ -32,14 +33,43 @@ void show_headline() {
         lv_label_set_text(news_src, "News");
         lv_label_set_text(news_head, model.valid ? "No headlines right now" : "");
         lv_label_set_text(news_pager, "");
+        lv_obj_add_flag(score_box, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_remove_flag(news_head, LV_OBJ_FLAG_HIDDEN);
         return;
+    }
+    // A game in progress stays on screen instead of rotating with the headlines.
+    for (size_t i = 0; i < model.news.size(); i++) {
+        if (model.news[i].live()) {
+            news_index = i;
+            break;
+        }
     }
     news_index %= model.news.size();
     const NewsItem& item = model.news[news_index];
     std::string src = item.source;
     if (!item.age.empty()) src += "  ·  " + item.age;
+    if (item.has_score() && !item.detail.empty() && item.detail != item.age) src += "  ·  " + item.detail;
     lv_label_set_text(news_src, src.c_str());
-    lv_label_set_text(news_head, item.title.c_str());
+    lv_obj_set_style_text_color(news_src, col(item.live() ? C_RED_TEXT : C_BLUE), 0);
+
+    if (item.has_score()) {  // scoreboard: away team on top, home below
+        const std::string* names[2] = {&item.away_name, &item.home_name};
+        const int points[2] = {item.away_score, item.home_score};
+        for (int side = 0; side < 2; side++) {
+            bool behind = points[side] < points[1 - side];
+            lv_label_set_text(score_name[side], names[side]->c_str());
+            lv_label_set_text_fmt(score_pts[side], "%d", LV_MAX(0, points[side]));
+            lv_obj_set_style_text_color(score_name[side], col(behind ? C_MUTED : C_TEXT), 0);
+            lv_obj_set_style_text_color(score_pts[side], col(behind ? C_MUTED : C_TEXT), 0);
+        }
+        lv_label_set_text(score_note, item.tv.empty() ? "" : ("On " + item.tv).c_str());
+        lv_obj_remove_flag(score_box, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(news_head, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_label_set_text(news_head, item.title.c_str());
+        lv_obj_add_flag(score_box, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_remove_flag(news_head, LV_OBJ_FLAG_HIDDEN);
+    }
     lv_label_set_text_fmt(news_pager, "%d / %d", (int)news_index + 1, (int)model.news.size());
 }
 
@@ -258,6 +288,18 @@ void build(lv_obj_t* t) {
     lv_obj_set_pos(news_head, 0, 34);
     lv_obj_set_size(news_head, lv_pct(100), lv_font_get_line_height(&font_text_28) * HEADLINE_LINES);
     lv_label_set_long_mode(news_head, LV_LABEL_LONG_DOT);
+    score_box = make_box(news);
+    lv_obj_set_pos(score_box, 0, 40);
+    lv_obj_set_size(score_box, lv_pct(100), 150);
+    lv_obj_add_flag(score_box, LV_OBJ_FLAG_HIDDEN);
+    for (int side = 0; side < 2; side++) {
+        score_name[side] = make_label(score_box, &font_text_28, C_TEXT);
+        lv_obj_set_pos(score_name[side], 0, 10 + side * 56);
+        score_pts[side] = make_label(score_box, &font_text_40, C_TEXT);
+        lv_obj_align(score_pts[side], LV_ALIGN_TOP_RIGHT, 0, 2 + side * 56);
+    }
+    score_note = make_label(score_box, &font_text_16, C_DIM);
+    lv_obj_align(score_note, LV_ALIGN_BOTTOM_LEFT, 0, 0);
     news_pager = make_label(news, &font_text_16, C_FAINT);
     lv_obj_align(news_pager, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
 
@@ -341,6 +383,9 @@ void tick() {
 }
 
 void next_headline() {
+    for (const NewsItem& item : model.news) {
+        if (item.live()) return;  // pinned while the game is on
+    }
     if (model.news.size() > 1) {
         news_index++;
         show_headline();
