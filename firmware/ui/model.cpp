@@ -58,6 +58,12 @@ bool parse_model(const char* json, size_t len, Model& out) {
             m.high = weather["high"] | 0;
             m.low = weather["low"] | 0;
             m.sunrise = weather["sunrise_label"] | "";
+            // read as numbers of any kind: a whole value may still arrive as 1794839880.0
+            long long rise = (long long)(weather["sunrise"] | 0.0), set = (long long)(weather["sunset"] | 0.0);
+            if (rise > 0 && set > rise) {
+                m.sunrise_min = (int)(((rise + m.utc_offset) % 86400 + 86400) % 86400 / 60);
+                m.sunset_min = (int)(((set + m.utc_offset) % 86400 + 86400) % 86400 / 60);
+            }
             m.sunset = weather["sunset_label"] | "";
         }
         JsonObjectConst air = weather["air"];

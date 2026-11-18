@@ -216,6 +216,36 @@ void show_agenda() {
     lv_obj_scroll_to_y(list, scroll, LV_ANIM_OFF);
 }
 
+// The clock's colour follows the sun: peach at sunrise, warm white in the morning, neutral
+// at midday, amber around sunset, then cooler blue-white through the evening and night.
+uint32_t clock_tone(int minute, int sunrise, int sunset) {
+    struct Stop {
+        int at;
+        uint32_t hex;
+    };
+    const uint32_t NIGHT = 0xB4C3EA, DAWN = 0xFFD2A6, MORNING = 0xF8EBD3, MIDDAY = 0xF1EFE8,
+                   GOLDEN = 0xFFC98A, EVENING = 0xD3DEF7;
+    const Stop stops[] = {
+        {sunrise - 70, NIGHT},  {sunrise, DAWN},      {sunrise + 100, MORNING},
+        {(sunrise + sunset) / 2, MIDDAY},             {sunset - 90, MIDDAY},
+        {sunset - 10, GOLDEN},  {sunset + 50, EVENING}, {sunset + 170, NIGHT},
+    };
+    const int count = sizeof stops / sizeof stops[0];
+    if (minute <= stops[0].at || minute >= stops[count - 1].at) return NIGHT;
+    for (int i = 1; i < count; i++) {
+        if (minute > stops[i].at) continue;
+        const Stop &a = stops[i - 1], &b = stops[i];
+        int span = LV_MAX(1, b.at - a.at), part = minute - a.at;
+        uint32_t out = 0;
+        for (int shift = 16; shift >= 0; shift -= 8) {  // blend red, green and blue separately
+            int from = (a.hex >> shift) & 0xFF, to = (b.hex >> shift) & 0xFF;
+            out |= (uint32_t)(from + (to - from) * part / span) << shift;
+        }
+        return out;
+    }
+    return NIGHT;
+}
+
 // The strip takes a hint of colour from the conditions: warm when clear, blue in rain,
 // indigo on a clear night, and so on.
 uint32_t weather_tone(const std::string& icon) {
@@ -426,6 +456,9 @@ void tick() {
         lv_obj_update_layout(time_lbl);
         lv_obj_align_to(ampm_lbl, time_lbl, LV_ALIGN_OUT_RIGHT_BOTTOM, 12, -2);
     }
+    uint32_t tone = clock_tone(now.tm_hour * 60 + now.tm_min, model.sunrise_min, model.sunset_min);
+    lv_obj_set_style_text_color(time_lbl, col(tone), 0);
+    lv_obj_set_style_text_color(ampm_lbl, lv_color_mix(col(tone), col(C_BG), LV_OPA_70), 0);
     snprintf(text, sizeof text, "%s, %s %d", DAYS[now.tm_wday], MONTHS[now.tm_mon], now.tm_mday);
     if (strcmp(lv_label_get_text(date_lbl), text) != 0) lv_label_set_text(date_lbl, text);
 }
