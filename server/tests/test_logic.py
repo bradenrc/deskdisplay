@@ -277,49 +277,48 @@ def test_night_hours():
     assert night.active(at(13, 30), daytime) and not night.active(at(14), daytime)
 
 
-def test_snow_card():
+def test_snow_reports_need_fresh_snow():
     now = at(10)
-    hours = [
-        {
-            "time": (now + timedelta(hours=h)).timestamp(),
-            "snow": 0.5 if -6 < h <= 0 else 0.25 if 0 < h <= 12 else 0,
-            "temp": 24.4,
+
+    def mountain(name, recent_per_hour, coming_per_hour):
+        return {
+            "name": name,
+            "unit": '"',
+            "hours": [
+                {
+                    "time": (now + timedelta(hours=h)).timestamp(),
+                    "snow": (
+                        recent_per_hour
+                        if -8 < h <= 0
+                        else coming_per_hour if 0 < h <= 8 else 0
+                    ),
+                    "temp": 24.4,
+                }
+                for h in range(-48, 48)
+            ],
         }
-        for h in range(-24, 48)
-    ]
-    raw = {"name": "Bogus Basin", "unit": '"', "hours": hours}
-    s = snow.summary(raw, now.timestamp())
-    assert s == {"recent": 3.0, "coming": 3.0, "temp": 24}
-    card = snow.card(raw, now, months=[11, 12, 1, 2, 3, 4])
-    assert card["source"] == "Bogus Basin" and card["kind"] == "snow"
-    assert (
-        card["title"]
-        == '3" of new snow in the last 24 hours, 3" more expected by this time tomorrow. 24° on the mountain.'
-    )
-    dry = {"name": "Brundage", "unit": '"', "hours": [{**h, "snow": 0} for h in hours]}
-    assert snow.card(dry, now, months=[11])["title"].startswith(
-        "No new snow in the last 24 hours, none expected"
-    )
-    assert (
-        snow.card(dry, datetime(2026, 7, 4, 10, tzinfo=TZ), months=[11]) is None
-    )  # summer: no card
 
-
-def test_news_mix():
-    heads = [{"title": f"h{i}"} for i in range(6)]
-    cards = [{"title": "bogus"}, {"title": "brundage"}]
-    assert [i["title"] for i in news.mix(heads, cards)] == [
-        "h0",
-        "bogus",
-        "h1",
-        "h2",
-        "h3",
-        "h4",
-        "brundage",
-        "h5",
+    bogus, brundage = mountain("Bogus Basin", 0.5, 0.25), mountain("Brundage", 0, 0)
+    assert snow.summary(bogus, now.timestamp()) == {
+        "recent": 4.0,
+        "coming": 2.0,
+        "temp": 24,
+    }
+    both = snow.reports([bogus, brundage], now.timestamp())
+    assert both == [
+        {"name": "Bogus Basin", "new": '4"', "detail": '+2" tomorrow', "temp": 24},
+        {"name": "Brundage", "new": '0"', "detail": "None expected", "temp": 24},
     ]
-    assert news.mix(heads, []) == heads
-    assert [i["title"] for i in news.mix([], cards)] == ["bogus", "brundage"]
+    assert (
+        snow.reports([brundage], now.timestamp()) == []
+    )  # nothing new anywhere: no report
+    two_days_on = (now + timedelta(hours=60)).timestamp()
+    assert (
+        snow.reports([bogus, brundage], two_days_on) == []
+    )  # the snow is now older than 48 hours
+    assert snow.reports([], now.timestamp()) == []
+    dusting = snow.reports([mountain("Tamarack", 0.5, 0.05)], now.timestamp())
+    assert dusting[0]["detail"] == '<1" tomorrow'
 
 
 def test_travel_address_filter():
@@ -416,10 +415,12 @@ def _competition(state, detail, home, away, tv="Fox"):
     }
 
 
-def test_sports_pick_and_cards():
-    team = {"league": "nfl", "team": "sea", "name": "Seahawks"}
+def test_sports_pick_and_chips():
     now = at(10)  # Monday Nov 16, 10:00
-    iso = lambda dt: dt.astimezone(ZoneInfo("UTC")).strftime("%Y-%m-%dT%H:%MZ")
+
+    def iso(dt):
+        return dt.astimezone(ZoneInfo("UTC")).strftime("%Y-%m-%dT%H:%MZ")
+
     last = sports.parse_game(
         "1",
         iso(at(14, day=15)),
@@ -458,30 +459,26 @@ def test_sports_pick_and_cards():
 
     final = sports.pick(games, now.timestamp(), preview_days=6, final_hours=36)
     assert final["id"] == "1"  # yesterday's final is still within 36 hours
-    c = sports.card(team, final, now)
-    assert (
-        c["title"] == "Seahawks 21, Raiders 13"
-        and c["age"] == "Final"
-        and c["state"] == "post"
-    )
+    assert sports.chip(final, now) == {
+        "state": "post",
+        "line1": "SEA @ LV",
+        "line2": "21–13 · Final",
+        "tv": "CBS",
+    }
 
     later = at(
         10, day=17
     )  # Tuesday: the final has aged out, next game is within 6 days
     upcoming = sports.pick(games, later.timestamp(), 6, 36)
     assert upcoming["id"] == "2"
-    c = sports.card(team, upcoming, later)
-    assert (
-        c["title"] == "Seahawks vs Rams, Saturday at 3:00 pm on Fox"
-        and c["age"] == "Next game"
-    )
-    assert sports.card(team, upcoming, at(9, day=21))["title"].startswith(
-        "Seahawks vs Rams, today at 3:00 pm"
-    )
-    assert (
-        sports.card(team, far, at(9, day=29))["title"]
-        == "Seahawks at Eagles, tomorrow, time to be announced"
-    )
+    assert sports.chip(upcoming, later) == {
+        "state": "pre",
+        "line1": "LAR @ SEA",
+        "line2": "Sat 3:00 pm",
+        "tv": "Fox",
+    }
+    assert sports.chip(upcoming, at(9, day=21))["line2"] == "Today 3:00 pm"
+    assert sports.chip(far, at(9, day=29))["line2"] == "Mon · TBD"
     assert (
         sports.pick([far], later.timestamp(), 6, 36) is None
     )  # quiet week: nothing shown
@@ -496,11 +493,15 @@ def test_sports_pick_and_cards():
     assert (
         sports.pick([last, live, far], now.timestamp(), 6, 36)["id"] == "2"
     )  # live beats a recent final
-    c = sports.card(team, live, at(16, day=21))
+    assert sports.chip(live, at(16, day=21)) == {
+        "state": "in",
+        "line1": "LAR @ SEA",
+        "line2": "10–17 · 3rd 8:42",
+        "tv": "Fox",
+    }
     assert (
-        c["title"] == "Rams 10, Seahawks 17"
-        and c["age"] == "Live"
-        and c["detail"] == "8:42 - 3rd"
+        sports.chip(dict(live, detail="Halftime"), at(16, day=21))["line2"]
+        == "10–17 · Halftime"
     )
 
     assert sports.may_be_live(
@@ -557,9 +558,9 @@ def test_sports_tracker_polls_live_only_when_needed(monkeypatch):
         "schedule": 1,
         "live": 0,
     }  # schedule cached for an hour, no live polling midweek
-    assert sports.cards(tracker, at(10, day=18))[0]["age"] == "Next game"
+    assert sports.chips(tracker, at(10, day=18))[0]["line2"] == "Sat 3:00 pm"
 
     tracker.refresh(kickoff.timestamp() + 300)
     assert calls["live"] == 1
-    assert sports.cards(tracker, kickoff)[0]["title"] == "Rams 0, Seahawks 7"
-    assert sports.cards(None, kickoff) == []
+    assert sports.chips(tracker, kickoff)[0]["line2"] == "0–7 · 1st 12:00"
+    assert sports.chips(None, kickoff) == []

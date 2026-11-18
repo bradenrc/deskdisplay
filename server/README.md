@@ -74,16 +74,16 @@ All of these are configured in `config/config.yaml`; the example file documents 
   coloured by category. No setup.
 - **Night mode.** Between `night.start` and `night.end` the screen shows a dim, plain
   clock. Touching it brings the dashboard back for 10 minutes.
-- **Ski areas.** Each entry under `ski.resorts` adds a snow card that rotates with the
-  headlines: snowfall in the last 24 hours, the amount expected in the next 24, and the
-  temperature. Cards appear in the months listed in `ski.months`, and at any time snow is
-  falling or forecast. The figures are a weather-model estimate at the coordinates and
-  elevation you give, not the resort's own report, and there is no lift status.
-- **Sports.** Each team under `sports.teams` gets a card among the headlines in a week it
-  plays: the next game with its time and channel, then the live score, then the final.
-  A game in progress stays on screen instead of rotating, and its score is refreshed
-  every minute. Nothing is shown in a week without a game. Scores come from ESPN's public
-  feeds, which are unofficial and could change without notice.
+- **Ski areas.** When any mountain under `ski.resorts` has had `ski.min_new` or more of new
+  snow in the last 48 hours, a small snow report appears beside the news: the 48-hour
+  total, what is expected by tomorrow, and the temperature. With no fresh snow it is not
+  shown at all. The figures are a weather-model estimate at the coordinates and elevation
+  you give, not the resort's own report, and there is no lift status.
+- **Sports.** In a week a team under `sports.teams` plays, a small card beside the clock
+  shows the next game ("IU @ WASH", "Sat 1:30 pm"), then the live score and game clock,
+  then the final. Up to three show at once; more than that rotate. A live score is
+  refreshed every minute. Scores come from ESPN's public feeds, which are unofficial and
+  could change without notice.
 - **Leave-by times.** With `travel.enabled: true`, a meeting whose location is a street
   address gets a line such as "Leave by 12:06 pm · 19 min drive", worked out from your
   `location`. It turns amber when it is nearly time and red when you should already have

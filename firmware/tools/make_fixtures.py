@@ -59,14 +59,23 @@ headlines = [
     ("Example Sports", 130, "Local team wins in overtime"),
 ]
 feed = [{"title": t, "source": s, "published": now.timestamp() - m * 60, "summary": ""} for s, m, t in headlines]
-mountain = {
-    "name": "Bogus Basin",
-    "unit": '"',
-    "hours": [
-        {"time": (now + timedelta(hours=h)).timestamp(), "snow": 0.5 if -8 < h <= 0 else 0.25 if 0 < h <= 12 else 0, "temp": 24}
-        for h in range(-24, 48)
-    ],
-}
+def mountain(name, recent_per_hour, coming_per_hour):
+    return {
+        "name": name,
+        "unit": '"',
+        "hours": [
+            {"time": (now + timedelta(hours=h)).timestamp(), "snow": recent_per_hour if -8 < h <= 0 else coming_per_hour if 0 < h <= 8 else 0, "temp": 24}
+            for h in range(-48, 48)
+        ],
+    }
+
+
+# Three games in the three states a card can be in.
+games = [
+    {"state": "in", "line1": "SDSU @ BOIS", "line2": "17–24 · 3rd 8:42", "tv": "USA Net"},
+    {"state": "pre", "line1": "IU @ WASH", "line2": "Sat 1:30 pm", "tv": "Peacock"},
+    {"state": "post", "line1": "SEA @ LV", "line2": "21–13 · Final", "tv": "CBS"},
+]
 view = weather.view(forecast, now, 2, 5)
 view["air"] = weather.air_view({"aqi": 42})
 doc = {
@@ -74,7 +83,9 @@ doc = {
     "agenda": agenda.build(events, now, 10, travel={"buffer_minutes": 5, "padding_percent": 15}),
     "weather": view,
     "moon": astro.moon(now),
-    "news": news.mix(news.view(feed, now.timestamp()), [snow.card(mountain, now, [11, 12, 1, 2, 3, 4])]),
+    "news": news.view(feed, now.timestamp()),
+    "games": games,
+    "snow": snow.reports([mountain("Bogus Basin", 0.5, 0.25), mountain("Brundage", 0.75, 0)], now.timestamp()),
     "night": night.active(now, {"enabled": True, "start": "22:30", "end": "06:30"}),
     "photos": {"count": 1},
 }

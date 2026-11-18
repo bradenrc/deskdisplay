@@ -84,19 +84,3 @@ def view(items: list[dict] | None, now_ts: float | None = None) -> list[dict]:
         age = age_label(now_ts - item["published"]) if item["published"] else ""
         out.append({**item, "age": age, "kind": "news"})
     return out
-
-
-def mix(headlines: list[dict], cards: list[dict], every: int = 4) -> list[dict]:
-    """Slot extra cards (snow reports and the like) in among the headlines.
-
-    The first card follows the first headline, then one card after every `every` headlines.
-    """
-    if not cards:
-        return headlines
-    out: list[dict] = []
-    waiting = list(cards)
-    for index, item in enumerate(headlines):
-        out.append(item)
-        if waiting and index % every == 0:
-            out.append(waiting.pop(0))
-    return out + waiting

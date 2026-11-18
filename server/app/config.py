@@ -31,8 +31,8 @@ DEFAULTS: dict[str, Any] = {
         "padding_percent": 15,
         "max_miles": 150,
     },
-    # Ski areas: [{name, latitude, longitude, elevation_m}]. Shown in the colder months.
-    "ski": {"resorts": [], "refresh_minutes": 60, "months": [11, 12, 1, 2, 3, 4]},
+    # Ski areas: [{name, latitude, longitude, elevation_m}]. Shown only after fresh snow.
+    "ski": {"resorts": [], "refresh_minutes": 60, "min_new": 0.5},
     # Teams to follow: [{league: nfl | college-football, team: ESPN id or abbreviation, name}].
     "sports": {
         "teams": [],

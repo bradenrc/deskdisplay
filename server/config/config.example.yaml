@@ -31,21 +31,21 @@ travel:
   padding_percent: 15
   max_miles: 150
 
-# Ski areas, shown as a snow card among the headlines in the colder months, or whenever
-# snow is falling or forecast. Figures are a weather-model estimate at the given point,
-# not the resort's own report.
+# Ski areas. A small snow report appears beside the news only when at least one of them has
+# had `min_new` or more of new snow in the last 48 hours. Figures are a weather-model estimate
+# at the given point, not the resort's own report. The first two are shown.
 ski:
   refresh_minutes: 60
-  months: [11, 12, 1, 2, 3, 4]
+  min_new: 0.5 # inches (cm if units is celsius)
   resorts: []
     # - name: Bogus Basin
     #   latitude: 43.764
     #   longitude: -116.103
     #   elevation_m: 2040 # mid-mountain
 
-# Teams to follow. Each gets a card among the headlines in a week it plays: the next game,
-# then the live score (which stays on screen during the game), then the final.
-# league is nfl or college-football; team is ESPN's abbreviation or numeric id.
+# Teams to follow. In a week a team plays, a small card beside the clock shows its next game,
+# then the live score, then the final. league is nfl or college-football; team is ESPN's
+# abbreviation or numeric id.
 sports:
   preview_days: 6 # start showing the next game this many days ahead
   final_hours: 36 # keep showing a final score this long

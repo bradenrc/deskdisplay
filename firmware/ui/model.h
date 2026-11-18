@@ -19,12 +19,16 @@ struct Hour {
 
 struct NewsItem {
     std::string title, source, age;
-    // Game cards (kind "game") also carry the score for the scoreboard layout.
-    std::string kind, state, detail, tv;  // state: pre | in | post
-    std::string away_name, home_name;
-    int away_score = -1, home_score = -1;
-    bool live() const { return kind == "game" && state == "in"; }
-    bool has_score() const { return kind == "game" && state != "pre"; }
+};
+
+// A game, small enough to sit beside the clock: "IU @ WASH" over "Sat 1:30 pm" or "17–24 · 3rd 8:42".
+struct Game {
+    std::string state, line1, line2;  // state: pre | in | post
+};
+
+// Fresh snow at a ski area: 4" over "+2" by tomorrow".
+struct Snow {
+    std::string name, amount, detail, temp;  // temp like "24°", may be empty
 };
 
 struct Model {
@@ -51,6 +55,8 @@ struct Model {
     std::string moon_name;
 
     std::vector<NewsItem> news;
+    std::vector<Game> games;
+    std::vector<Snow> snow;  // empty unless there has been new snow in the last 48 hours
     int photo_count = 0;
     bool night = false;  // server says it is quiet hours
 };

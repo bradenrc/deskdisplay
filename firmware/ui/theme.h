@@ -28,6 +28,7 @@ LV_FONT_DECLARE(font_text_24)
 LV_FONT_DECLARE(font_text_28)
 LV_FONT_DECLARE(font_text_40)
 LV_FONT_DECLARE(font_clock_56)
+LV_FONT_DECLARE(font_clock_124)
 LV_FONT_DECLARE(font_clock_140)
 
 static inline lv_color_t col(uint32_t hex) { return lv_color_hex(hex); }

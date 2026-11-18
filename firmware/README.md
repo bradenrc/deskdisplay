@@ -10,10 +10,6 @@ places: a desktop simulator for designing, and the ESP32-S3 board.
 These are rendered by the simulator at the panel's real size, 1024×600, from the sample
 data in `fixtures/`.
 
-During a game the news tile becomes a scoreboard and stays put:
-
-![Live game](docs/game.png)
-
 Overnight the screen switches to a dim clock:
 
 ![Night clock](docs/night.png)
@@ -48,7 +44,7 @@ with the mouse to change pages; the mouse acts as the finger.
 | `ui/` | Everything on screen. Shared by the simulator and the device. |
 | `ui/fonts/` | Generated bitmap fonts (Montserrat). Regenerate with `tools/make_fonts.sh`. |
 | `sim/` | Simulator: window, networking through libcurl, screenshots. |
-| `fixtures/` | Sample server reply and photo for `make demo` and `make shots`. `fixtures/game` and `fixtures/next-game` show the sports cards: `./build/deskdisplay-sim --fixtures fixtures/game`. |
+| `fixtures/` | Sample server reply and photo for `make demo` and `make shots`. |
 | `tools/make_fixtures.py` | Regenerates the sample data using the server's own code. |
 | `lv_conf.h` | LVGL settings shared by both targets. |
 

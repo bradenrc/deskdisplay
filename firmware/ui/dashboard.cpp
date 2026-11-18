@@ -10,7 +10,7 @@
 namespace {
 
 constexpr int MAX_TITLE_LINES = 3;
-constexpr int HEADLINE_LINES = 4;
+constexpr size_t MAX_CHIPS = 3;
 
 const char* const DAYS[] = {"Sunday",   "Monday", "Tuesday", "Wednesday",
                             "Thursday", "Friday", "Saturday"};
@@ -18,14 +18,14 @@ const char* const MONTHS[] = {"January", "February", "March",     "April",   "Ma
                               "July",    "August",   "September", "October", "November", "December"};
 
 lv_obj_t *date_lbl, *time_lbl, *ampm_lbl;
-lv_obj_t *news_src, *news_head, *news_pager;
-lv_obj_t *score_box, *score_name[2], *score_pts[2], *score_note;  // away, then home
+lv_obj_t *news_box, *news_src, *news_head, *news_pager;
+lv_obj_t *chips_box, *snow_box;
 lv_obj_t *today_hdr, *list;
 lv_obj_t *cur_icon, *cur_temp, *cur_cond, *cur_hl, *cur_air, *hour_box;
 lv_obj_t *sunrise_lbl, *sunset_lbl, *moon, *moon_lbl;
 
 Model model;
-size_t news_index = 0;
+size_t news_index = 0, game_index = 0;
 std::string status_text = "Connecting to the server…";
 
 void show_headline() {
@@ -33,44 +33,76 @@ void show_headline() {
         lv_label_set_text(news_src, "News");
         lv_label_set_text(news_head, model.valid ? "No headlines right now" : "");
         lv_label_set_text(news_pager, "");
-        lv_obj_add_flag(score_box, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_remove_flag(news_head, LV_OBJ_FLAG_HIDDEN);
         return;
-    }
-    // A game in progress stays on screen instead of rotating with the headlines.
-    for (size_t i = 0; i < model.news.size(); i++) {
-        if (model.news[i].live()) {
-            news_index = i;
-            break;
-        }
     }
     news_index %= model.news.size();
     const NewsItem& item = model.news[news_index];
     std::string src = item.source;
     if (!item.age.empty()) src += "  ·  " + item.age;
-    if (item.has_score() && !item.detail.empty() && item.detail != item.age) src += "  ·  " + item.detail;
     lv_label_set_text(news_src, src.c_str());
-    lv_obj_set_style_text_color(news_src, col(item.live() ? C_RED_TEXT : C_BLUE), 0);
-
-    if (item.has_score()) {  // scoreboard: away team on top, home below
-        const std::string* names[2] = {&item.away_name, &item.home_name};
-        const int points[2] = {item.away_score, item.home_score};
-        for (int side = 0; side < 2; side++) {
-            bool behind = points[side] < points[1 - side];
-            lv_label_set_text(score_name[side], names[side]->c_str());
-            lv_label_set_text_fmt(score_pts[side], "%d", LV_MAX(0, points[side]));
-            lv_obj_set_style_text_color(score_name[side], col(behind ? C_MUTED : C_TEXT), 0);
-            lv_obj_set_style_text_color(score_pts[side], col(behind ? C_MUTED : C_TEXT), 0);
-        }
-        lv_label_set_text(score_note, item.tv.empty() ? "" : ("On " + item.tv).c_str());
-        lv_obj_remove_flag(score_box, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(news_head, LV_OBJ_FLAG_HIDDEN);
-    } else {
-        lv_label_set_text(news_head, item.title.c_str());
-        lv_obj_add_flag(score_box, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_remove_flag(news_head, LV_OBJ_FLAG_HIDDEN);
-    }
+    lv_label_set_text(news_head, item.title.c_str());
     lv_label_set_text_fmt(news_pager, "%d / %d", (int)news_index + 1, (int)model.news.size());
+}
+
+// Up to MAX_CHIPS games in the space beside the clock. With more, the set rotates.
+void show_games() {
+    lv_obj_clean(chips_box);
+    size_t count = model.games.size();
+    if (count <= MAX_CHIPS) game_index = 0;
+    for (size_t i = 0; i < count && i < MAX_CHIPS; i++) {
+        const Game& game = model.games[(game_index + i) % count];
+        bool live = game.state == "in";
+        lv_obj_t* chip = make_box(chips_box);
+        lv_obj_set_size(chip, lv_pct(100), LV_SIZE_CONTENT);
+        lv_obj_set_flex_flow(chip, LV_FLEX_FLOW_COLUMN);
+        lv_obj_set_style_bg_color(chip, col(C_PANEL), 0);
+        lv_obj_set_style_bg_opa(chip, LV_OPA_COVER, 0);
+        lv_obj_set_style_radius(chip, 8, 0);
+        lv_obj_set_style_pad_hor(chip, 10, 0);
+        lv_obj_set_style_pad_ver(chip, 5, 0);
+        if (live) {  // a game in progress gets a red edge
+            lv_obj_set_style_border_side(chip, LV_BORDER_SIDE_LEFT, 0);
+            lv_obj_set_style_border_width(chip, 3, 0);
+            lv_obj_set_style_border_color(chip, col(C_RED), 0);
+        }
+        make_label(chip, &font_text_16, C_MUTED, game.line1.c_str());
+        make_label(chip, &font_text_16, live ? C_RED_TEXT : game.state == "post" ? C_TEXT : C_DIM,
+                   game.line2.c_str());
+    }
+}
+
+// Fresh snow sits to the right of the news, which narrows to make room.
+void show_snow() {
+    constexpr int FULL = 512, SNOW_W = 166, GAP = 10;
+    lv_obj_clean(snow_box);
+    bool any = !model.snow.empty();
+    lv_obj_set_width(news_box, any ? FULL - SNOW_W - GAP : FULL);
+    const lv_font_t* font = any ? &font_text_24 : &font_text_28;
+    lv_obj_set_style_text_font(news_head, font, 0);
+    lv_obj_set_height(news_head, lv_font_get_line_height(font) * (any ? 5 : 4));
+    if (!any) {
+        lv_obj_add_flag(snow_box, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
+    lv_obj_remove_flag(snow_box, LV_OBJ_FLAG_HIDDEN);
+    make_label(snow_box, &font_text_16, C_BLUE, "Snow, 48 hours");
+    for (const Snow& spot : model.snow) {
+        lv_obj_t* block = make_box(snow_box);
+        lv_obj_set_size(block, lv_pct(100), LV_SIZE_CONTENT);
+        lv_obj_set_flex_flow(block, LV_FLEX_FLOW_COLUMN);
+        lv_obj_set_style_pad_top(block, 12, 0);
+        make_label(block, &font_text_16, C_MUTED, spot.name.c_str());
+        lv_obj_t* line = make_box(block);  // amount, with the temperature beside it
+        lv_obj_set_size(line, lv_pct(100), LV_SIZE_CONTENT);
+        lv_obj_set_flex_flow(line, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(line, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_END);
+        make_label(line, &font_text_28, C_TEXT, spot.amount.c_str());
+        lv_obj_set_style_pad_bottom(make_label(line, &font_text_16, C_DIM, spot.temp.c_str()), 4, 0);
+        lv_obj_t* detail = make_label(block, &font_text_16, C_DIM, spot.detail.c_str());
+        lv_obj_set_width(detail, lv_pct(100));
+        lv_obj_set_height(detail, lv_font_get_line_height(&font_text_16));
+        lv_label_set_long_mode(detail, LV_LABEL_LONG_DOT);
+    }
 }
 
 void add_note(const char* text, uint32_t hex, const lv_font_t* font = &font_text_18) {
@@ -267,41 +299,50 @@ lv_obj_t* rule(lv_obj_t* parent, int x, int y, int w, int h) {
 namespace dashboard {
 
 void build(lv_obj_t* t) {
-    constexpr int SPLIT = 566, STRIP_Y = 470;
+    constexpr int SPLIT = 566, STRIP_Y = 470, CHIPS_X = 404;
 
-    // Left: date, clock, news
+    // Left: date, clock, game chips, news, snow
     date_lbl = make_label(t, &font_text_20, C_MUTED, status_text.c_str());
     lv_obj_set_pos(date_lbl, 34, 20);
-    time_lbl = make_label(t, &font_clock_140, C_TEXT);
-    lv_obj_set_pos(time_lbl, 28, 70);
+    time_lbl = make_label(t, &font_clock_124, C_TEXT);
+    lv_obj_set_pos(time_lbl, 28, 78);
     ampm_lbl = make_label(t, &font_text_28, C_MUTED);
 
-    lv_obj_t* news = make_box(t);
-    lv_obj_set_pos(news, 28, 204);
-    lv_obj_set_size(news, SPLIT - 28 - 26, STRIP_Y - 204 - 18);
-    lv_obj_set_style_bg_color(news, col(C_PANEL), 0);
-    lv_obj_set_style_bg_opa(news, LV_OPA_COVER, 0);
-    lv_obj_set_style_radius(news, 14, 0);
-    lv_obj_set_style_pad_all(news, 18, 0);
-    news_src = make_label(news, &font_text_18, C_BLUE, "News");
-    news_head = make_label(news, &font_text_28, C_TEXT);
+    chips_box = make_box(t);
+    lv_obj_set_pos(chips_box, CHIPS_X, 22);
+    lv_obj_set_size(chips_box, SPLIT - CHIPS_X - 10, 174);
+    lv_obj_set_flex_flow(chips_box, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(chips_box, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    lv_obj_set_style_pad_row(chips_box, 6, 0);
+
+    constexpr int NEWS_Y = 204, NEWS_H = STRIP_Y - NEWS_Y - 18;
+    news_box = make_box(t);
+    lv_obj_set_pos(news_box, 28, NEWS_Y);
+    lv_obj_set_size(news_box, SPLIT - 28 - 26, NEWS_H);
+    lv_obj_set_style_bg_color(news_box, col(C_PANEL), 0);
+    lv_obj_set_style_bg_opa(news_box, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(news_box, 14, 0);
+    lv_obj_set_style_pad_all(news_box, 18, 0);
+    news_src = make_label(news_box, &font_text_18, C_BLUE, "News");
+    lv_obj_set_width(news_src, lv_pct(100));
+    lv_obj_set_height(news_src, lv_font_get_line_height(&font_text_18));
+    lv_label_set_long_mode(news_src, LV_LABEL_LONG_DOT);
+    news_head = make_label(news_box, &font_text_28, C_TEXT);
     lv_obj_set_pos(news_head, 0, 34);
-    lv_obj_set_size(news_head, lv_pct(100), lv_font_get_line_height(&font_text_28) * HEADLINE_LINES);
+    lv_obj_set_size(news_head, lv_pct(100), lv_font_get_line_height(&font_text_28) * 4);
     lv_label_set_long_mode(news_head, LV_LABEL_LONG_DOT);
-    score_box = make_box(news);
-    lv_obj_set_pos(score_box, 0, 40);
-    lv_obj_set_size(score_box, lv_pct(100), 150);
-    lv_obj_add_flag(score_box, LV_OBJ_FLAG_HIDDEN);
-    for (int side = 0; side < 2; side++) {
-        score_name[side] = make_label(score_box, &font_text_28, C_TEXT);
-        lv_obj_set_pos(score_name[side], 0, 10 + side * 56);
-        score_pts[side] = make_label(score_box, &font_text_40, C_TEXT);
-        lv_obj_align(score_pts[side], LV_ALIGN_TOP_RIGHT, 0, 2 + side * 56);
-    }
-    score_note = make_label(score_box, &font_text_16, C_DIM);
-    lv_obj_align(score_note, LV_ALIGN_BOTTOM_LEFT, 0, 0);
-    news_pager = make_label(news, &font_text_16, C_FAINT);
+    news_pager = make_label(news_box, &font_text_16, C_FAINT);
     lv_obj_align(news_pager, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
+
+    snow_box = make_box(t);
+    lv_obj_set_size(snow_box, 166, NEWS_H);
+    lv_obj_set_pos(snow_box, SPLIT - 26 - 166, NEWS_Y);
+    lv_obj_set_flex_flow(snow_box, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_bg_color(snow_box, col(C_PANEL), 0);
+    lv_obj_set_style_bg_opa(snow_box, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(snow_box, 14, 0);
+    lv_obj_set_style_pad_all(snow_box, 14, 0);
+    lv_obj_add_flag(snow_box, LV_OBJ_FLAG_HIDDEN);
 
     // Right: agenda
     rule(t, SPLIT, 0, 1, STRIP_Y);
@@ -355,7 +396,9 @@ void build(lv_obj_t* t) {
 
 void update(const Model& fresh) {
     model = fresh;
+    show_snow();
     show_headline();
+    show_games();
     show_agenda();
     show_weather();
     tick();
@@ -383,12 +426,13 @@ void tick() {
 }
 
 void next_headline() {
-    for (const NewsItem& item : model.news) {
-        if (item.live()) return;  // pinned while the game is on
-    }
     if (model.news.size() > 1) {
         news_index++;
         show_headline();
+    }
+    if (model.games.size() > MAX_CHIPS) {
+        game_index = (game_index + 1) % model.games.size();
+        show_games();
     }
 }
 

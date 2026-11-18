@@ -178,11 +178,6 @@ class Core:
         )
         if forecast is not None:
             forecast["air"] = weather.air_view(self.store.get("air"))
-        cards = sports.cards(self.sports, now) + [
-            card
-            for report in self.store.get("ski") or []
-            if (card := snow.card(report, now, self.cfg["ski"]["months"]))
-        ]
         return {
             "time": {
                 "epoch": int(now.timestamp()),
@@ -202,7 +197,11 @@ class Core:
             ),
             "weather": forecast,
             "moon": astro.moon(now),
-            "news": news.mix(news.view(self.store.get("news"), now.timestamp()), cards),
+            "news": news.view(self.store.get("news"), now.timestamp()),
+            "games": sports.chips(self.sports, now),
+            "snow": snow.reports(
+                self.store.get("ski") or [], now.timestamp(), self.cfg["ski"]["min_new"]
+            ),
             "night": night.active(now, self.cfg["night"]),
             "photos": {"count": self.library.count()},
         }

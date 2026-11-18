@@ -82,15 +82,22 @@ bool parse_model(const char* json, size_t len, Model& out) {
         item.title = n["title"] | "";
         item.source = n["source"] | "";
         item.age = n["age"] | "";
-        item.kind = n["kind"] | "news";
-        item.state = n["state"] | "";
-        item.detail = n["detail"] | "";
-        item.tv = n["tv"] | "";
-        item.away_name = n["away"]["name"] | "";
-        item.home_name = n["home"]["name"] | "";
-        item.away_score = n["away"]["score"] | -1;
-        item.home_score = n["home"]["score"] | -1;
         if (!item.title.empty()) m.news.push_back(item);
+    }
+    for (JsonObjectConst g : doc["games"].as<JsonArrayConst>()) {
+        Game game;
+        game.state = g["state"] | "pre";
+        game.line1 = g["line1"] | "";
+        game.line2 = g["line2"] | "";
+        m.games.push_back(game);
+    }
+    for (JsonObjectConst s : doc["snow"].as<JsonArrayConst>()) {
+        Snow spot;
+        spot.name = s["name"] | "";
+        spot.amount = s["new"] | "";
+        spot.detail = s["detail"] | "";
+        if (!s["temp"].isNull()) spot.temp = std::to_string(s["temp"] | 0) + "°";
+        m.snow.push_back(spot);
     }
     m.photo_count = doc["photos"]["count"] | 0;
     m.night = doc["night"] | false;

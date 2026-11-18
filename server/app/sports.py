@@ -191,51 +191,50 @@ class Tracker:
         return out
 
 
+DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+
 def _when(start: datetime, now: datetime, time_set: bool) -> str:
-    days = (start.date() - now.date()).days
-    day = "today" if days == 0 else "tomorrow" if days == 1 else start.strftime("%A")
+    """Kick-off in a few characters: "Today 1:30 pm", "Sat 1:30 pm", "Sat · TBD"."""
+    day = "Today" if start.date() == now.date() else DAYS[start.weekday()]
     if not time_set:
-        return f"{day}, time to be announced"
-    clock = f"{start.hour % 12 or 12}:{start.minute:02d} {'am' if start.hour < 12 else 'pm'}"
-    return f"{day} at {clock}"
+        return f"{day} · TBD"
+    half = "am" if start.hour < 12 else "pm"
+    return f"{day} {start.hour % 12 or 12}:{start.minute:02d} {half}"
 
 
-def card(team: dict, game: dict, now: datetime) -> dict:
-    """A card for the headline rotation. `title` always reads on its own as plain text."""
+def _clock(detail: str) -> str:
+    """ESPN's "8:42 - 3rd" reads better as "3rd 8:42" in a narrow space."""
+    left, sep, right = detail.partition(" - ")
+    return f"{right} {left}" if sep else detail
+
+
+def chip(game: dict, now: datetime) -> dict:
+    """A two-line summary small enough to sit beside the clock.
+
+    line1 is always "AWAY @ HOME"; line2 is the kick-off time, or the score in the same
+    away-home order followed by the game clock or "Final".
+    """
     home, away = game["home"], game["away"]
-    mine = game[game.get("mine", "home")]
-    label = team.get("name") or mine["name"]
     if game["state"] == "pre":
         start = datetime.fromtimestamp(game["start"], now.tzinfo)
-        where = "vs" if game.get("mine") == "home" else "at"
-        other = away if game.get("mine") == "home" else home
-        title = (
-            f"{label} {where} {other['name']}, {_when(start, now, game['time_set'])}"
-        )
-        if game["tv"]:
-            title += f" on {game['tv']}"
-        tag = "Next game"
+        line2 = _when(start, now, game["time_set"])
     else:
-        title = (
-            f"{away['name']} {away['score'] or 0}, {home['name']} {home['score'] or 0}"
+        status = (
+            _clock(game["detail"])
+            if game["state"] == "in"
+            else game["detail"] or "Final"
         )
-        tag = "Live" if game["state"] == "in" else "Final"
+        line2 = f"{away['score'] or 0}–{home['score'] or 0} · {status}"
     return {
-        "title": title,
-        "source": label,
-        "age": tag,
-        "published": None,
-        "summary": "",
-        "kind": "game",
-        "state": game["state"],
-        "detail": game["detail"] if game["state"] != "pre" else "",
+        "state": game["state"],  # pre | in | post
+        "line1": f"{away['abbr']} @ {home['abbr']}",
+        "line2": line2,
         "tv": game["tv"],
-        "home": home,
-        "away": away,
     }
 
 
-def cards(tracker: Tracker | None, now: datetime) -> list[dict]:
+def chips(tracker: Tracker | None, now: datetime) -> list[dict]:
     if not tracker:
         return []
-    return [card(team, game, now) for team, game in tracker.games(now.timestamp())]
+    return [chip(game, now) for _team, game in tracker.games(now.timestamp())]

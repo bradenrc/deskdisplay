@@ -222,14 +222,6 @@
       "kind": "news"
     },
     {
-      "title": "4\" of new snow in the last 24 hours, 3\" more expected by this time tomorrow. 24° on the mountain.",
-      "source": "Bogus Basin",
-      "age": "Snow forecast",
-      "published": null,
-      "summary": "",
-      "kind": "snow"
-    },
-    {
       "title": "Chip maker announces new low-power radio for small devices",
       "source": "Example Tech",
       "published": 1794849120.0,
@@ -252,6 +244,40 @@
       "summary": "",
       "age": "2 hr ago",
       "kind": "news"
+    }
+  ],
+  "games": [
+    {
+      "state": "in",
+      "line1": "SDSU @ BOIS",
+      "line2": "17–24 · 3rd 8:42",
+      "tv": "USA Net"
+    },
+    {
+      "state": "pre",
+      "line1": "IU @ WASH",
+      "line2": "Sat 1:30 pm",
+      "tv": "Peacock"
+    },
+    {
+      "state": "post",
+      "line1": "SEA @ LV",
+      "line2": "21–13 · Final",
+      "tv": "CBS"
+    }
+  ],
+  "snow": [
+    {
+      "name": "Bogus Basin",
+      "new": "4\"",
+      "detail": "+2\" tomorrow",
+      "temp": 24
+    },
+    {
+      "name": "Brundage",
+      "new": "6\"",
+      "detail": "None expected",
+      "temp": 24
     }
   ],
   "night": false,

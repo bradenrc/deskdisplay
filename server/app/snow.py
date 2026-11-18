@@ -1,4 +1,4 @@
-"""Snow outlook for ski areas, shown as a card that rotates with the news headlines.
+"""Snow report for ski areas, shown beside the news when there is fresh snow.
 
 The numbers come from Open-Meteo's weather model at the mountain's coordinates and
 elevation. They are a forecast-model estimate, not the resort's own measured snow report,
@@ -6,8 +6,6 @@ and there is no lift status: no free, openly accessible source for those was fou
 """
 
 from __future__ import annotations
-
-from datetime import datetime
 
 import requests
 
@@ -21,7 +19,7 @@ def fetch(resort: dict, timezone: str, units: str = "fahrenheit") -> dict:
         "latitude": resort["latitude"],
         "longitude": resort["longitude"],
         "hourly": "snowfall,temperature_2m",
-        "past_days": 1,
+        "past_days": 2,
         "forecast_days": 3,
         "precipitation_unit": "mm" if metric else "inch",
         "temperature_unit": "celsius" if metric else "fahrenheit",
@@ -48,15 +46,15 @@ def fetch(resort: dict, timezone: str, units: str = "fahrenheit") -> dict:
 
 
 def _amount(value: float, unit: str) -> str:
-    shown = f"{value:.0f}" if value >= 1 else "under 1"
+    shown = f"{value:.0f}" if value >= 1 else "<1" if value >= 0.1 else "0"
     return f"{shown}{unit}" if unit == '"' else f"{shown} {unit}"
 
 
 def summary(raw: dict, now_ts: float) -> dict:
-    """Snowfall in the last and next 24 hours, and the current temperature."""
+    """Snowfall over the last 48 hours and the next 24, and the current temperature."""
     hours = raw["hours"]
     # each hourly value covers the hour that ends at its timestamp
-    recent = sum(h["snow"] for h in hours if now_ts - DAY < h["time"] <= now_ts)
+    recent = sum(h["snow"] for h in hours if now_ts - 2 * DAY < h["time"] <= now_ts)
     coming = sum(h["snow"] for h in hours if now_ts < h["time"] <= now_ts + DAY)
     current = min(hours, key=lambda h: abs(h["time"] - now_ts), default=None)
     return {
@@ -70,31 +68,33 @@ def summary(raw: dict, now_ts: float) -> dict:
     }
 
 
-def card(
-    raw: dict, now: datetime, months: list[int], threshold: float = 0.2
-) -> dict | None:
-    """A headline-style card, or None when there is nothing worth showing (summer)."""
-    s = summary(raw, now.timestamp())
-    snowing = s["recent"] >= threshold or s["coming"] >= threshold
-    if not snowing and now.month not in months:
-        return None
-    unit = raw["unit"]
-    if s["recent"] >= threshold:
-        text = f"{_amount(s['recent'], unit)} of new snow in the last 24 hours"
-    else:
-        text = "No new snow in the last 24 hours"
-    if s["coming"] >= threshold:
-        more = " more" if s["recent"] >= threshold else ""
-        text += f", {_amount(s['coming'], unit)}{more} expected by this time tomorrow."
-    else:
-        text += ", none expected by tomorrow."
-    if s["temp"] is not None:
-        text += f" {s['temp']}° on the mountain."
-    return {
-        "title": text,
-        "source": raw["name"],
-        "age": "Snow forecast",
-        "published": None,
-        "summary": "",
-        "kind": "snow",
-    }
+def reports(
+    raws: list[dict], now_ts: float, min_new: float = 0.5, limit: int = 2
+) -> list[dict]:
+    """One entry per mountain, or [] unless at least one has fresh snow in the last 48 hours.
+
+    Every configured mountain is listed once any qualifies, so they can be compared.
+    """
+    summaries = [(raw, summary(raw, now_ts)) for raw in raws]
+    if not any(s["recent"] >= min_new for _raw, s in summaries):
+        return []
+    out = []
+    for raw, s in summaries[:limit]:
+        unit = raw["unit"]
+        # kept short: this sits in a narrow tile
+        amount = _amount(s["coming"], unit)
+        if s["coming"] >= 1:
+            more = f"+{amount} tomorrow"
+        elif s["coming"] >= 0.1:
+            more = f"{amount} tomorrow"  # under an inch reads oddly with a plus sign
+        else:
+            more = "None expected"
+        out.append(
+            {
+                "name": raw["name"],
+                "new": _amount(s["recent"], unit),  # e.g. 4"
+                "detail": more,
+                "temp": s["temp"],
+            }
+        )
+    return out
