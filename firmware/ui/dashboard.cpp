@@ -1,5 +1,6 @@
 // Page 1: clock, one news headline, today's agenda and the weather strip.
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 
@@ -12,6 +13,7 @@ namespace {
 constexpr int MAX_TITLE_LINES = 3;
 constexpr size_t MAX_CHIPS = 3;
 constexpr int CHIP_H = 52;
+constexpr int MOON_SIZE = 56;
 // The game cards and the snow tile share one column, so their edges line up.
 constexpr int SIDE_X = 400, SIDE_W = 148;
 
@@ -416,10 +418,10 @@ void build(lv_obj_t* t) {
     lv_obj_set_pos(icon_create(strip, 32, "sunset"), 816, 70);
     sunset_lbl = make_label(strip, &font_text_18, C_TEXT);
     lv_obj_set_pos(sunset_lbl, 856, 76);
-    moon = moon_create(strip, 36);
-    lv_obj_set_pos(moon, 942, 24);
+    moon = moon_create(strip, MOON_SIZE);
+    lv_obj_set_pos(moon, 960 - MOON_SIZE / 2, 10);
     moon_lbl = make_label(strip, &font_text_16, C_MUTED);
-    lv_obj_set_pos(moon_lbl, 908, 68);
+    lv_obj_set_pos(moon_lbl, 908, 72);
     lv_obj_set_width(moon_lbl, 104);
     lv_obj_set_style_text_align(moon_lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(moon_lbl, LV_LABEL_LONG_WRAP);
@@ -456,7 +458,13 @@ void tick() {
         lv_obj_update_layout(time_lbl);
         lv_obj_align_to(ampm_lbl, time_lbl, LV_ALIGN_OUT_RIGHT_BOTTOM, 12, -2);
     }
-    uint32_t tone = clock_tone(now.tm_hour * 60 + now.tm_min, model.sunrise_min, model.sunset_min);
+    // Server setting: "sun" follows the day, "white" is plain, "#rrggbb" is any fixed colour.
+    uint32_t tone = C_TEXT;
+    if (model.clock_mode == "sun") {
+        tone = clock_tone(now.tm_hour * 60 + now.tm_min, model.sunrise_min, model.sunset_min);
+    } else if (model.clock_mode.size() == 7 && model.clock_mode[0] == '#') {
+        tone = (uint32_t)strtoul(model.clock_mode.c_str() + 1, nullptr, 16);
+    }
     lv_obj_set_style_text_color(time_lbl, col(tone), 0);
     lv_obj_set_style_text_color(ampm_lbl, lv_color_mix(col(tone), col(C_BG), LV_OPA_70), 0);
     snprintf(text, sizeof text, "%s, %s %d", DAYS[now.tm_wday], MONTHS[now.tm_mon], now.tm_mday);

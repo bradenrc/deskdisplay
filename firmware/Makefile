@@ -25,7 +25,7 @@ CXXFLAGS   := -std=c++17 $(CFLAGS) -Wall
 LDLIBS     := $(shell sdl2-config --libs 2>/dev/null) -lcurl -lm
 
 LVGL_SRC   := $(shell find $(LVGL)/src -name '*.c' 2>/dev/null)
-FONT_SRC   := $(wildcard ui/fonts/*.c)
+FONT_SRC   := $(wildcard ui/fonts/*.c) $(wildcard ui/*.c)
 UI_SRC     := $(wildcard ui/*.cpp) sim/main.cpp
 OBJS       := $(LVGL_SRC:%.c=$(BUILD)/%.o) $(FONT_SRC:%.c=$(BUILD)/%.o) $(UI_SRC:%.cpp=$(BUILD)/%.o)
 

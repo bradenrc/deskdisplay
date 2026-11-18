@@ -34,6 +34,13 @@ struct Snow {
     std::string name, amount, detail, temp;  // temp like "24°", may be empty
 };
 
+// One card on the markets page.
+struct Stock {
+    std::string name, price, change, direction;  // direction: up | down | flat
+    std::vector<uint8_t> points;                 // the day's prices scaled to 0..100
+    int baseline = -1;                           // yesterday's close on that scale
+};
+
 struct Model {
     bool valid = false;
     long long epoch = 0;  // server time when this was fetched
@@ -60,6 +67,9 @@ struct Model {
 
     std::vector<NewsItem> news;
     std::vector<Game> games;
+    std::vector<Stock> stocks;
+    bool market_open = false;
+    std::string clock_mode = "sun";  // "sun", "white" or "#rrggbb"
     std::vector<Snow> snow;  // empty unless there has been new snow in the last 48 hours
     int photo_count = 0;
     bool night = false;  // server says it is quiet hours

@@ -12,7 +12,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "server"))
-from app import agenda, astro, news, night, snow, weather  # noqa: E402
+from app import agenda, astro, news, night, snow, stocks, weather  # noqa: E402
 from PIL import Image, ImageDraw  # noqa: E402
 
 OUT = Path(__file__).resolve().parents[1] / "fixtures"
@@ -76,6 +76,26 @@ games = [
     {"state": "pre", "line1": "IU @ WASH", "line2": "Sat 1:30 pm", "tv": "Peacock", "colors": ["#33006f", "#e8d3a2"]},
     {"state": "post", "line1": "SEA @ LV", "line2": "21–13 · Final", "tv": "CBS", "colors": ["#002a5c", "#69be28"]},
 ]
+# Made-up quotes with different shapes of day; the session is open at the sample time.
+import math  # noqa: E402
+
+
+def quote(symbol, name, previous, drift, wobble):
+    closes = [previous * (1 + drift * i / 78 + wobble * math.sin(i / 6.0 + len(name))) for i in range(40)]
+    return {"symbol": symbol, "name": name, "price": closes[-1], "previous": previous, "closes": closes,
+            "session_start": at(7, 30).timestamp(), "session_end": at(14).timestamp()}
+
+
+watch = stocks.Watchlist([])
+watch.quotes = [
+    quote("^GSPC", "S&P 500", 7416.59, 0.012, 0.0015),
+    quote("^DJI", "Dow Jones", 51608.17, -0.016, 0.002),
+    quote("^IXIC", "Nasdaq", 24509.76, 0.02, 0.003),
+    quote("EX1", "Example Corp", 351.90, -0.004, 0.004),
+    quote("EX2", "Sample Industries", 88.12, 0.031, 0.005),
+    quote("EX3", "Demo Holdings", 1204.50, 0.0002, 0.002),
+]
+
 view = weather.view(forecast, now, 2, 5)
 view["air"] = weather.air_view({"aqi": 42})
 doc = {
@@ -86,6 +106,8 @@ doc = {
     "news": news.view(feed, now.timestamp()),
     "games": games,
     "snow": snow.reports([mountain("Bogus Basin", 0.5, 0.25), mountain("Brundage", 0.75, 0)], now.timestamp()),
+    "stocks": stocks.view(watch, now.timestamp()),
+    "display": {"clock": "sun"},
     "night": night.active(now, {"enabled": True, "start": "22:30", "end": "06:30"}),
     "photos": {"count": 1},
 }

@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from app import agenda, astro, ical, news, night, snow, sports, travel, weather
+from app import agenda, astro, ical, news, night, snow, sports, stocks, travel, weather
 from app.photos import parse_folder_id
 from app.rclone import extract_token
 
@@ -575,3 +575,51 @@ def test_sports_tracker_polls_live_only_when_needed(monkeypatch):
     assert calls["live"] == 1
     assert sports.chips(tracker, kickoff)[0]["line2"] == "0–7 · 1st 12:00"
     assert sports.chips(None, kickoff) == []
+
+
+def test_stocks_view_and_refresh_pacing(monkeypatch):
+    calls = []
+
+    def fake(entry):
+        calls.append(entry["symbol"])
+        if entry["symbol"] == "BAD":
+            raise RuntimeError("no such symbol")
+        return {
+            "symbol": entry["symbol"],
+            "name": entry.get("name") or entry["symbol"],
+            "price": 7340.53,
+            "previous": 7416.59,
+            "closes": [7400 - i for i in range(79)],
+            "session_start": 1000,
+            "session_end": 2000,
+        }
+
+    monkeypatch.setattr(stocks, "fetch_one", fake)
+    watch = stocks.Watchlist(
+        [{"symbol": "^GSPC", "name": "S&P 500"}, {"symbol": "BAD"}]
+    )
+    assert watch.refresh(now=1500) == 1  # one failure, the good quote still shown
+    out = stocks.view(watch, 1500)
+    assert out["open"] is True and len(out["items"]) == 1
+    item = out["items"][0]
+    assert (
+        item["price"] == "7,340.53"
+        and item["change"] == "-1.03%"
+        and item["direction"] == "down"
+    )
+    assert (
+        len(item["points"]) <= 42
+        and min(item["points"]) == 0
+        and item["baseline"] == 100
+    )
+    assert item["points"][0] > item["points"][-1]  # the day sloped down
+
+    watch.refresh(now=1800)  # open: asks again
+    assert calls.count("^GSPC") == 2
+    watch.refresh(now=2100)  # just closed: one more to capture the close
+    watch.refresh(now=2200)  # closed and recently fetched: skipped
+    assert calls.count("^GSPC") == 3
+    watch.refresh(now=2100 + 31 * 60)
+    assert calls.count("^GSPC") == 4
+    assert stocks.view(watch, 5000)["open"] is False
+    assert stocks.view(None, 0) is None

@@ -16,6 +16,20 @@ weather:
   hourly_step: 2 # one forecast column every 2 hours
   hourly_count: 5
 
+# How the screen looks. clock_color: "sun" shifts the clock's colour through the day (peach at
+# sunrise, amber at sunset, blue-white at night); "white" keeps it plain; or use "#rrggbb".
+display:
+  clock_color: sun
+
+# Markets page. Symbols are Yahoo Finance's: ^GSPC is the S&P 500, ^DJI the Dow, ^IXIC the
+# Nasdaq, and plain tickers such as AAPL for shares. Up to six are shown. Quotes come from an
+# unofficial public feed and can be delayed.
+stocks:
+  refresh_minutes: 5
+  symbols: []
+    # - {symbol: "^GSPC", name: S&P 500}
+    # - {symbol: AAPL, name: Apple}
+
 # A dim, plain clock overnight. Touching the screen brings the dashboard back for 10 minutes.
 night:
   enabled: true

@@ -3,9 +3,13 @@
 The screen's user interface, written once in C++ with [LVGL](https://lvgl.io) and run in two
 places: a desktop simulator for designing, and the ESP32-S3 board.
 
-| Dashboard | Photo frame | Aquarium |
-|---|---|---|
-| ![Dashboard](docs/dashboard.png) | ![Photo frame](docs/photo.png) | ![Aquarium](docs/aquarium.png) |
+| Dashboard | Markets |
+|---|---|
+| ![Dashboard](docs/dashboard.png) | ![Markets](docs/markets.png) |
+
+| Photo frame | Aquarium |
+|---|---|
+| ![Photo frame](docs/photo.png) | ![Aquarium](docs/aquarium.png) |
 
 These are rendered by the simulator at the panel's real size, 1024×600, from the sample
 data in `fixtures/`.
@@ -56,11 +60,14 @@ millisecond clock, and a large-buffer allocator. The simulator's versions are in
 
 - **Dashboard** (`ui/dashboard.cpp`) polls `/api/dashboard` every 30 seconds. The clock is
   set from the server's reply, so the device needs no timezone settings of its own.
+- **Markets** (`ui/markets.cpp`) draws a card per symbol from the same server reply.
 - **Photo frame** (`ui/photo.cpp`) fetches `/api/photo/next` at the panel size every 30
   seconds while it is the visible page, and decodes the JPEG into one full-screen buffer.
 - **Aquarium** (`ui/aquarium.cpp`) paints the scenery once and moves small fish and bubble
   objects over it, so only the areas around them are redrawn.
 - **Icons** (`ui/icons.cpp`) are drawn from circles, lines and arcs. There is no icon font.
+- **The moon** (`ui/moon.cpp`) is one small texture of the moon's face, lit differently for
+  each phase. `tools/make_moon.py` regenerates the texture.
 
 ## ESP32 target
 

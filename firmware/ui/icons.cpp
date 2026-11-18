@@ -10,7 +10,6 @@ namespace {
 
 struct State {
     char key[16];
-    float phase;
 };
 
 struct Pen {
@@ -157,35 +156,13 @@ void draw_icon(const Pen& p, const char* key) {
     }
 }
 
-void draw_moon(const Pen& p, float phase) {
-    p.circle(0.5f, 0.5f, 0.5f, C_LINE);
-    int r = p.s / 2;
-    float k = cosf(2 * 3.14159f * phase);
-    lv_draw_rect_dsc_t d;
-    lv_draw_rect_dsc_init(&d);
-    d.bg_color = col(C_TEXT);
-    for (int row = -r; row < r; row++) {
-        float half = sqrtf((float)(r * r) - (row + 0.5f) * (row + 0.5f));
-        float left = phase <= 0.5f ? half * k : -half;
-        float right = phase <= 0.5f ? half : -half * k;
-        int x1 = p.x + r + (int)lroundf(left), x2 = p.x + r + (int)lroundf(right) - 1;
-        if (x2 < x1) continue;
-        lv_area_t a = {x1, p.y + r + row, x2, p.y + r + row};
-        lv_draw_rect(p.layer, &d, &a);
-    }
-}
-
 void on_draw(lv_event_t* e) {
     lv_obj_t* obj = (lv_obj_t*)lv_event_get_target(e);
     State* st = (State*)lv_obj_get_user_data(obj);
     lv_area_t a;
     lv_obj_get_coords(obj, &a);
     Pen p = {lv_event_get_layer(e), a.x1, a.y1, (int)lv_area_get_width(&a)};
-    if (st->key[0]) {
-        draw_icon(p, st->key);
-    } else {
-        draw_moon(p, st->phase);
-    }
+    draw_icon(p, st->key);
 }
 
 void on_delete(lv_event_t* e) { free(lv_obj_get_user_data((lv_obj_t*)lv_event_get_target(e))); }
@@ -215,13 +192,4 @@ void icon_set(lv_obj_t* icon, const char* key) {
     if (strncmp(st->key, key, sizeof(st->key)) == 0) return;
     strncpy(st->key, key, sizeof(st->key) - 1);
     lv_obj_invalidate(icon);
-}
-
-lv_obj_t* moon_create(lv_obj_t* parent, int size) { return create(parent, size); }
-
-void moon_set(lv_obj_t* moon, float phase) {
-    State* st = (State*)lv_obj_get_user_data(moon);
-    st->key[0] = 0;
-    st->phase = phase;
-    lv_obj_invalidate(moon);
 }

@@ -105,6 +105,18 @@ bool parse_model(const char* json, size_t len, Model& out) {
         }
         m.games.push_back(game);
     }
+    m.market_open = doc["stocks"]["open"] | false;
+    for (JsonObjectConst q : doc["stocks"]["items"].as<JsonArrayConst>()) {
+        Stock stock;
+        stock.name = q["name"] | "";
+        stock.price = q["price"] | "";
+        stock.change = q["change"] | "";
+        stock.direction = q["direction"] | "flat";
+        stock.baseline = q["baseline"] | -1;
+        for (JsonVariantConst p : q["points"].as<JsonArrayConst>()) stock.points.push_back((uint8_t)(p | 0));
+        m.stocks.push_back(stock);
+    }
+    m.clock_mode = doc["display"]["clock"] | "sun";
     for (JsonObjectConst s : doc["snow"].as<JsonArrayConst>()) {
         Snow spot;
         spot.name = s["name"] | "";

@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 
-from . import agenda, astro, config, ical, news, night, snow, sports, weather
+from . import agenda, astro, config, ical, news, night, snow, sports, stocks, weather
 from .jobs import Runner, Skip, Store
 from .photos import Library
 from .rclone import Rclone
@@ -53,6 +53,11 @@ class Core:
             if teams
             else None
         )
+        self.stocks = (
+            stocks.Watchlist(cfg["stocks"]["symbols"])
+            if cfg["stocks"]["symbols"]
+            else None
+        )
         self.runner = Runner(
             self.store,
             [
@@ -63,6 +68,11 @@ class Core:
                 *(
                     [("ski", self.job_ski, cfg["ski"]["refresh_minutes"])]
                     if cfg["ski"]["resorts"]
+                    else []
+                ),
+                *(
+                    [("stocks", self.job_stocks, cfg["stocks"]["refresh_minutes"])]
+                    if cfg["stocks"]["symbols"]
                     else []
                 ),
                 # checked every minute so a live score stays current; quiet otherwise
@@ -106,6 +116,12 @@ class Core:
             )
         except Exception as exc:
             self.store.note("air", "error", str(exc)[:200])
+
+    def job_stocks(self) -> None:
+        failures = self.stocks.refresh()
+        self.store.set("stocks", True)
+        if failures:
+            raise RuntimeError(f"{failures} symbol(s) could not be read")
 
     def job_sports(self) -> None:
         failures = self.sports.refresh(time.time())
@@ -199,6 +215,8 @@ class Core:
             "moon": astro.moon(now),
             "news": news.view(self.store.get("news"), now.timestamp()),
             "games": sports.chips(self.sports, now),
+            "stocks": stocks.view(self.stocks, now.timestamp()),
+            "display": {"clock": str(self.cfg["display"]["clock_color"]).lower()},
             "snow": snow.reports(
                 self.store.get("ski") or [], now.timestamp(), self.cfg["ski"]["min_new"]
             ),

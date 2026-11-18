@@ -84,6 +84,13 @@ All of these are configured in `config/config.yaml`; the example file documents 
   then the final. Up to three show at once; more than that rotate. A live score is
   refreshed every minute. Scores come from ESPN's public feeds, which are unofficial and
   could change without notice.
+- **Markets.** Symbols under `stocks.symbols` appear on a markets page: price, change on the
+  day, and the day's shape against yesterday's close. Up to six are shown. Quotes come from
+  Yahoo Finance's public feed, which is unofficial and can be delayed, so treat it as a
+  glance and not as something to trade on.
+- **Clock colour.** `display.clock_color` is `sun` by default, which shifts the clock from
+  peach at sunrise through amber at sunset to blue-white at night. Set it to `white` for a
+  plain clock, or to any `"#rrggbb"`.
 - **Leave-by times.** With `travel.enabled: true`, a meeting whose location is a street
   address gets a line such as "Leave by 12:06 pm · 19 min drive", worked out from your
   `location`. It turns amber when it is nearly time and red when you should already have

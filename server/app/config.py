@@ -21,6 +21,11 @@ DEFAULTS: dict[str, Any] = {
         "refresh_minutes": 5,
     },
     "weather": {"refresh_minutes": 15, "hourly_step": 2, "hourly_count": 5},
+    # clock_color: "sun" shifts the clock's colour through the day, "white" keeps it plain,
+    # or give any colour as "#rrggbb".
+    "display": {"clock_color": "sun"},
+    # Markets page: [{symbol, name}] using Yahoo Finance symbols (^GSPC is the S&P 500).
+    "stocks": {"symbols": [], "refresh_minutes": 5},
     # A dim, plain clock overnight. Touching the screen brings the dashboard back for a while.
     "night": {"enabled": True, "start": "22:30", "end": "06:30"},
     # "Leave by" hints for meetings with a street address. Off by default because it sends

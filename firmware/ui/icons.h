@@ -7,6 +7,6 @@
 lv_obj_t* icon_create(lv_obj_t* parent, int size, const char* key = "cloudy");
 void icon_set(lv_obj_t* icon, const char* key);
 
-// Moon showing the lit fraction for a phase (0 new, 0.5 full, 1 new again).
+// A shaded moon for any phase (0 new, 0.5 full, 1 new again). Implemented in moon.cpp.
 lv_obj_t* moon_create(lv_obj_t* parent, int size);
 void moon_set(lv_obj_t* moon, float phase);

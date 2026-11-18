@@ -175,6 +175,7 @@ def render(core, msg: str = "", err: str = "") -> str:
         ("air", "Air quality"),
         ("ski", "Ski areas"),
         ("sports", "Sports"),
+        ("stocks", "Markets"),
     ):
         if name in status["sources"]:
             labels[name] = title

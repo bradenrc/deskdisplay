@@ -139,16 +139,16 @@ int screenshots(const std::string& dir) {
     });
     app::init();
     mkdir(dir.c_str(), 0755);
-    const char* const names[] = {"dashboard", "photo", "aquarium"};
-    for (int page = 0; page < 3; page++) {
+    const char* const names[] = {"dashboard", "markets", "photo", "aquarium"};
+    for (int page = 0; page < app::PAGE_COUNT; page++) {
         app::show_page(page);
-        pump(page == 1 ? 2500 : 1300);
+        pump(page == app::PAGE_PHOTO ? 2500 : 1300);
         lv_refr_now(display);
         std::string path = dir + "/" + names[page] + ".bmp";
         if (!write_bmp(path, frame)) return 1;
         printf("wrote %s\n", path.c_str());
     }
-    app::show_page(0);
+    app::show_page(app::PAGE_DASHBOARD);
     app::force_night(true);
     pump(1300);
     lv_refr_now(display);
