@@ -8,7 +8,7 @@
 
 namespace {
 
-constexpr int MAX_ROWS = 7;
+constexpr int MAX_TITLE_LINES = 3;
 constexpr int HEADLINE_LINES = 4;
 
 const char* const DAYS[] = {"Sunday",   "Monday", "Tuesday", "Wednesday",
@@ -50,14 +50,17 @@ void add_note(const char* text, uint32_t hex, const lv_font_t* font = &font_text
     lv_label_set_long_mode(note, LV_LABEL_LONG_WRAP);
 }
 
-void add_row(const Event& e) {
+// One agenda line. Returns the row so the caller can check that it fitted.
+lv_obj_t* add_row(const Event& e) {
     bool now = e.status == "now", soon = e.status == "soon";
+    const int line = lv_font_get_line_height(&font_text_20);
 
     lv_obj_t* row = make_box(list);
-    lv_obj_set_size(row, lv_pct(100), 46);
+    lv_obj_set_size(row, lv_pct(100), LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
     lv_obj_set_style_pad_hor(row, 12, 0);
+    lv_obj_set_style_pad_ver(row, 9, 0);
     lv_obj_set_style_pad_column(row, 10, 0);
     lv_obj_set_style_radius(row, 10, 0);
     lv_obj_set_style_border_width(row, 2, 0);
@@ -65,25 +68,54 @@ void add_row(const Event& e) {
     lv_obj_set_style_border_opa(row, soon ? LV_OPA_COVER : LV_OPA_TRANSP, 0);  // starts soon: outline
 
     uint32_t time_hex = now ? C_RED_TEXT : soon ? C_AMBER_TEXT : C_MUTED;
-    lv_obj_t* when = make_label(row, &font_text_20, time_hex, e.start_label.c_str());
-    lv_obj_set_width(when, 66);
+    lv_obj_t* when = make_label(row, &font_text_20, time_hex);
+    lv_label_set_text_fmt(when, "%s %s", e.start_label.c_str(), e.start_ampm.c_str());
+    lv_obj_set_width(when, 98);
 
+    // The title wraps instead of being cut off, up to MAX_TITLE_LINES.
     lv_obj_t* title = make_label(row, &font_text_20, C_TEXT, e.title.c_str());
     lv_obj_set_flex_grow(title, 1);
-    lv_obj_set_height(title, lv_font_get_line_height(&font_text_20));
-    lv_label_set_long_mode(title, LV_LABEL_LONG_DOT);
+    lv_label_set_long_mode(title, LV_LABEL_LONG_WRAP);
 
     if (now) {  // in progress: "Now" and a red dot
-        make_label(row, &font_text_16, C_RED_TEXT, "Now");
+        lv_obj_t* tag = make_label(row, &font_text_16, C_RED_TEXT, "Now");
+        lv_obj_set_style_translate_y(tag, 3, 0);
         lv_obj_t* dot = make_box(row);
         lv_obj_set_size(dot, 12, 12);
         lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
         lv_obj_set_style_bg_color(dot, col(C_RED), 0);
         lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
+        lv_obj_set_style_translate_y(dot, (line - 12) / 2, 0);
     } else if (soon && e.minutes_until >= 0) {
         lv_obj_t* in = make_label(row, &font_text_16, C_AMBER_TEXT);
         lv_label_set_text_fmt(in, "in %d min", e.minutes_until);
+        lv_obj_set_style_translate_y(in, 3, 0);
     }
+
+    lv_obj_update_layout(row);
+    if (lv_obj_get_height(title) > line * MAX_TITLE_LINES) {  // very long: end with "…"
+        lv_obj_set_height(title, line * MAX_TITLE_LINES);
+        lv_label_set_long_mode(title, LV_LABEL_LONG_DOT);
+        lv_obj_update_layout(row);
+    }
+    return row;
+}
+
+// Adds rows until the list is full. Returns how many were shown.
+int add_rows(const std::vector<const Event*>& events, int reserve) {
+    int shown = 0;
+    for (const Event* e : events) {
+        lv_obj_t* row = add_row(*e);
+        lv_obj_update_layout(list);
+        int bottom = lv_obj_get_y(row) + lv_obj_get_height(row);
+        bool last = shown + 1 == (int)events.size();
+        if (bottom > lv_obj_get_height(list) - (last ? 0 : reserve) && shown > 0) {
+            lv_obj_delete(row);
+            break;
+        }
+        shown++;
+    }
+    return shown;
 }
 
 void show_agenda() {
@@ -100,29 +132,32 @@ void show_agenda() {
     for (const Event& e : model.events) {
         if (e.status != "past") left.push_back(&e);
     }
-    int rows = 0;
-    for (const Event* e : left) {
-        if (rows == MAX_ROWS) break;
-        add_row(*e);
-        rows++;
-    }
-    if ((int)left.size() > rows) {
-        char more[32];
-        snprintf(more, sizeof more, "+ %d more", (int)left.size() - rows);
-        add_note(more, C_DIM, &font_text_16);
-    } else if (!left.empty() && !model.free_after.empty()) {
-        add_note(("Free after " + model.free_after).c_str(), C_GREEN);
-    }
-    if (left.empty()) {
-        add_note(model.events.empty() ? "No meetings today" : "Nothing else today", C_GREEN);
-        if (!model.tomorrow.empty()) {
-            add_note("Tomorrow", C_DIM);
-            for (size_t i = 0; i < model.tomorrow.size() && rows < MAX_ROWS - 2; i++, rows++) {
-                Event plain = model.tomorrow[i];
-                plain.status = "upcoming";
-                add_row(plain);
+    const int NOTE = 34;  // room kept for one line of small text under the rows
+    if (!left.empty()) {
+        int shown = add_rows(left, NOTE);
+        if ((int)left.size() > shown) {
+            char more[32];
+            snprintf(more, sizeof more, "+ %d more", (int)left.size() - shown);
+            add_note(more, C_DIM, &font_text_16);
+        } else if (!model.free_after.empty()) {
+            lv_obj_update_layout(list);
+            lv_obj_t* last = lv_obj_get_child(list, -1);
+            if (lv_obj_get_y(last) + lv_obj_get_height(last) + NOTE <= lv_obj_get_height(list)) {
+                add_note(("Free after " + model.free_after).c_str(), C_GREEN);
             }
         }
+        return;
+    }
+    add_note(model.events.empty() ? "No meetings today" : "Nothing else today", C_GREEN);
+    if (!model.tomorrow.empty()) {
+        add_note("Tomorrow", C_DIM);
+        std::vector<Event> plain(model.tomorrow);
+        std::vector<const Event*> next;
+        for (Event& e : plain) {
+            e.status = "upcoming";
+            next.push_back(&e);
+        }
+        add_rows(next, 0);
     }
 }
 
