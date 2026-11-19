@@ -1,221 +1,262 @@
-// Page 3: a pixel-art aquarium.
+// Page 4: the aquarium.
 //
-// The scenery is painted once into a full-screen image. Fish and bubbles are small objects
-// that move a few pixels at a time, so only the areas around them are redrawn. That keeps
-// it smooth on the ESP32, where redrawing the whole 1024x600 screen every frame is slow.
+// The tank itself is npceight's Desk_Aquarium (see ../tank/README.md). It has its own drawing
+// engine that paints whole-screen buffers and only touches what moved. This file hosts it as
+// a page of the desk display:
+//   - on the board, the tank takes over the panel while its page is showing, for full speed;
+//   - in the simulator, it paints into one buffer that the page shows as a picture.
+// It is fed the time, weather and sunrise/sunset the rest of the screen already has, so it
+// needs no Wi-Fi or clock of its own.
+//
+// Keep this file free of the other ui/ headers: the tank defines short names of its own.
 #include <cmath>
 #include <cstring>
 
 #include "app.h"
+#include "lvgl.h"
 #include "platform.h"
-#include "theme.h"
+
+#include "settings.h"
+#include "tank.h"
+#include "controls.h"
 
 namespace {
 
-constexpr int PX = 4;  // one art pixel = 4 screen pixels
-constexpr int ART_W = SCREEN_W / PX, ART_H = SCREEN_H / PX;
-constexpr int SAND = 12;  // art pixels of sand at the bottom
+Gfx gfx;
+Tank tank;
+Controls controls;
+DayNight lights;
 
-constexpr int FISH_W = 12, FISH_H = 7;
-const char* const FISH_ART[FISH_H] = {
-    "....XXXX....",
-    "X..XXXXXXX..",
-    "XXXXXSXXoXX.",
-    "XXXXXSXXXXXX",
-    "XXXXXSXXXXX.",
-    "X..XXXXXXX..",
-    "....XXXX....",
-};
+uint16_t *bgDay, *bgNight, *cleanDay, *cleanNight;
+uint16_t *clockSaveDay, *clockSaveNight, *wxSaveDay, *wxSaveNight;
+uint16_t* screens[3] = {nullptr, nullptr, nullptr};
+int screenCount = 1;
 
-struct Fish {
-    uint32_t body, stripe;
-    int block;  // screen pixels per sprite pixel: bigger = closer fish
-    int speed;  // art pixels per tick
-    lv_obj_t* obj;
-    lv_image_dsc_t facing[2];  // right, left
-    int x, y, dir;
-};
+lv_obj_t* tile = nullptr;
+lv_obj_t* view = nullptr;  // simulator only: the picture of the tank
+lv_image_dsc_t viewDsc;
 
-Fish fishes[] = {
-    {0xF0997B, 0xFAECE7, 12, 1},
-    {0xFAC775, 0xEF9F27, 8, 1},
-    {0xAFA9EC, 0x7F77DD, 8, 2},
-    {0x5DCAA5, 0x1D9E75, 4, 1},
-    {0xED93B1, 0xD4537E, 4, 2},
-    {0x85B7EB, 0x378ADD, 4, 1},
-};
+bool ready = false, failed = false, running = false, needFull = true, firstFrame = true;
+bool wantNight = false, showClock = SHOW_CLOCK;
+bool nightOverride = false, overrideNight = false, overrideBase = false;
+int back = 0, brightStep = 0, lastLevel = -1;
+float t = 0;
+uint32_t lastMs = 0, lastNightCheck = 0, lastFeed = 0, skyUntil = 0, statAt = 0;
+int frames = 0;
 
-struct Bubble {
-    lv_obj_t* obj;
-    int home_x, y, rate;
-};
-Bubble bubbles[] = {{nullptr, 500, 0, 2}, {nullptr, 516, 0, 3}, {nullptr, 150, 0, 2}, {nullptr, 880, 0, 3}};
+// From the server, by way of aquarium::update().
+int weatherCode = -1;
+float weatherTemp = NAN;
+int sunriseMin = 7 * 60, sunsetMin = 18 * 60;
 
-uint16_t* scene = nullptr;
-lv_image_dsc_t scene_dsc;
-lv_obj_t* clock_lbl;
-uint32_t ticks = 0;
-
-uint16_t rgb565(uint32_t hex) {
-    return (uint16_t)(((hex >> 8) & 0xF800) | ((hex >> 5) & 0x07E0) | ((hex >> 3) & 0x001F));
+// Day or night by the real sun, with the tank's own margin either side.
+bool nightBySun() {
+    if (NIGHT_MODE == 1) return false;
+    if (NIGHT_MODE == 2) return true;
+    struct tm now;
+    if (!app::local_time(now)) return false;
+    int minute = now.tm_hour * 60 + now.tm_min;
+    return minute < sunriseMin - SUN_MARGIN_MINUTES || minute >= sunsetMin + SUN_MARGIN_MINUTES;
 }
 
-void dot(int ax, int ay, uint32_t hex) {  // one art pixel
-    if (ax < 0 || ay < 0 || ax >= ART_W || ay >= ART_H) return;
-    uint16_t c = rgb565(hex);
-    for (int y = ay * PX; y < ay * PX + PX; y++) {
-        for (int x = ax * PX; x < ax * PX + PX; x++) scene[y * SCREEN_W + x] = c;
+bool prepare() {
+    if (ready || failed) return ready;
+    const size_t whole = (size_t)SCR_W * SCR_H * 2;
+    bgDay = (uint16_t*)plat::big_alloc(whole);
+    bgNight = (uint16_t*)plat::big_alloc(whole);
+    if (plat::panel_direct()) {
+        screenCount = plat::panel_buffers(screens);
+    } else {
+        screens[0] = (uint16_t*)plat::big_alloc(whole);
+        screenCount = 1;
+    }
+    if (!bgDay || !bgNight || !screens[0]) {
+        failed = true;
+        return false;
+    }
+    tank.begin(plat::millis() | 1);
+    // The rest are optional: without them fish show through the castle and the corners are
+    // simply redrawn every frame.
+    size_t strip = (size_t)(SCR_H - sceneryTop()) * SCR_W * 2;
+    cleanDay = (uint16_t*)plat::big_alloc(strip);
+    cleanNight = (uint16_t*)plat::big_alloc(strip);
+    if (!cleanDay || !cleanNight) cleanDay = cleanNight = nullptr;
+    clockSaveDay = (uint16_t*)plat::big_alloc((size_t)Tank::CLOCK_W * Tank::CLOCK_H * 2);
+    clockSaveNight = (uint16_t*)plat::big_alloc((size_t)Tank::CLOCK_W * Tank::CLOCK_H * 2);
+    wxSaveDay = (uint16_t*)plat::big_alloc((size_t)Tank::WX_W * Tank::WX_H * 2);
+    wxSaveNight = (uint16_t*)plat::big_alloc((size_t)Tank::WX_W * Tank::WX_H * 2);
+    tank.renderBackground(gfx, bgDay, false, cleanDay);
+    tank.renderBackground(gfx, bgNight, true, cleanNight);
+    gfx.cleanY0 = sceneryTop();
+
+    if (!plat::panel_direct()) {
+        memset(&viewDsc, 0, sizeof viewDsc);
+        viewDsc.header.magic = LV_IMAGE_HEADER_MAGIC;
+        viewDsc.header.cf = LV_COLOR_FORMAT_RGB565;
+        viewDsc.header.w = SCR_W;
+        viewDsc.header.h = SCR_H;
+        viewDsc.header.stride = SCR_W * 2;
+        viewDsc.data_size = (uint32_t)whole;
+        viewDsc.data = (const uint8_t*)screens[0];
+        view = lv_image_create(tile);
+        lv_obj_set_pos(view, 0, 0);
+    }
+    ready = true;
+    return true;
+}
+
+void tap(int x, int y) {
+    uint32_t now = plat::millis();
+    switch (controls.tap(x, y)) {
+        case CTL_FEED:
+            tank.dropFood(controls.feedX >= 0 ? controls.feedX : rnd(W * .2f, W * .8f));
+            break;
+        case CTL_NIGHT: {  // until the sun next changes its mind
+            bool bySun = nightBySun();
+            overrideNight = !wantNight;
+            nightOverride = overrideNight != bySun;
+            overrideBase = bySun;
+            wantNight = overrideNight;
+            break;
+        }
+        case CTL_WEATHER:  // a sky picked by hand lasts an hour
+            tank.weather = (tank.weather + 1) % WEATHER_COUNT;
+            skyUntil = now + 3600UL * 1000;
+            break;
+        case CTL_BRIGHT: brightStep = (brightStep + 1) % 4; break;
+        case CTL_CLOCK: showClock = !showClock; break;
+        case CTL_VISITOR:
+            if (!tank.whaleOn) tank.startWhale(rnd01() < .5f ? SP_WHALE : SP_TURTLE);
+            break;
+        default: break;
     }
 }
 
-void block(int ax, int ay, int w, int h, uint32_t hex) {
-    for (int y = ay; y < ay + h; y++) {
-        for (int x = ax; x < ax + w; x++) dot(x, y, hex);
-    }
+// If the board cannot keep up, turn down the most expensive effect still on.
+void autoQuality(float fps) {
+    if (!AUTO_QUALITY || MIN_FPS <= 0 || fps >= MIN_FPS) return;
+    if (tank.glow && !tank.glowLight) tank.glowLight = true;
+    else if (tank.glow) tank.glow = false;
+    else if (tank.solid) tank.solid = false;
+    else if (tank.shadows) tank.shadows = false;
 }
 
-void plant(int ax, int height, uint32_t dark, uint32_t light) {
-    int floor = ART_H - SAND;
-    for (int i = 0; i < height; i++) {
-        int sway = (int)lroundf(sinf(i / 5.0f + ax) * 2);
-        block(ax + sway, floor - 1 - i, 3, 1, (i / 4) % 2 ? light : dark);
-    }
-}
+void frame(lv_timer_t*) {
+    if (!running) return;
+    uint32_t now = plat::millis();
+    float dt = (now - lastMs) / 1000.0f;
+    if (dt > 0.1f) dt = 0.1f;
+    lastMs = now;
+    t += dt;
+    if (t > 3600) t -= 3600;
 
-void paint_scene() {
-    const uint32_t water[] = {0x0C447C, 0x083A6B, 0x06325C, 0x042C53};
-    for (int y = 0; y < ART_H; y++) {
-        int band = y < 14 ? 0 : y < 40 ? 1 : y < 80 ? 2 : 3;
-        // dither the band edges so they read as light fading with depth
-        if ((y == 14 || y == 40 || y == 80)) band--;
-        for (int x = 0; x < ART_W; x++) {
-            bool edge = (y == 14 || y == 40 || y == 80) && (x % 2);
-            dot(x, y, water[edge ? band + 1 : band]);
+    bool full = needFull;
+    needFull = false;
+    if (firstFrame || now - lastNightCheck > 1000) {
+        lastNightCheck = now;
+        bool bySun = nightBySun();
+        if (nightOverride && bySun != overrideBase) nightOverride = false;
+        wantNight = nightOverride ? overrideNight : bySun;
+        if ((int32_t)(now - skyUntil) > 0) tank.weather = weatherFromCode(weatherCode);
+    }
+    controls.update(dt);
+    if (firstFrame) lights.set(wantNight);
+    if (lights.step(wantNight, dt) || firstFrame) full = true;  // the background swapped
+    tank.night = lights.night;
+
+    int level = lights.brightness();
+    if (tank.weather != WEATHER_CLEAR && !tank.night) level = level * 85 / 100;  // overcast
+    if (tank.flash > 0) level += (int)((100 - level) * tank.flash);              // lightning
+    level = (int)lrintf(level * brightnessStep(brightStep));
+    if (level != lastLevel) {
+        plat::backlight(level);
+        lastLevel = level;
+    }
+
+    if (FEED_EVERY_MINUTES > 0) {  // first meal about a minute after the tank first appears
+        uint32_t every = FEED_EVERY_MINUTES * 60000UL;
+        if (firstFrame) lastFeed = now - every + 60000;
+        if (now - lastFeed >= every && (!tank.night || FEED_AT_NIGHT)) {
+            lastFeed = now;
+            tank.dropFoodRandom();
         }
     }
-    int floor = ART_H - SAND;
-    block(0, floor, ART_W, SAND, 0x633806);
-    for (int x = 0; x < ART_W; x++) {
-        if (x % 3 == 0) dot(x, floor, 0x854F0B);
-        if ((x * 7) % 11 == 0) dot(x, floor + 3 + (x % 5), 0x854F0B);
-        if ((x * 5) % 13 == 0) dot(x, floor + 2 + (x % 7), 0x412402);
+
+    char clockText[72] = "";
+    struct tm ti;
+    if (showClock && app::local_time(ti)) {
+        formatClock(clockText, sizeof clockText, ti.tm_hour, ti.tm_min, ti.tm_sec, ti.tm_wday,
+                    ti.tm_mon, ti.tm_mday);
     }
-    plant(18, 46, 0x0F6E56, 0x1D9E75);
-    plant(27, 30, 0x1D9E75, 0x5DCAA5);
-    plant(36, 18, 0x0F6E56, 0x1D9E75);
-    plant(206, 58, 0x1D9E75, 0x5DCAA5);
-    plant(216, 40, 0x0F6E56, 0x1D9E75);
-    plant(228, 24, 0x1D9E75, 0x5DCAA5);
-    // rocks
-    block(112, floor - 8, 30, 8, 0x5F5E5A);
-    block(117, floor - 13, 20, 5, 0x5F5E5A);
-    block(117, floor - 13, 20, 1, 0x888780);
-    block(112, floor - 8, 5, 1, 0x888780);
-    block(137, floor - 8, 5, 1, 0x888780);
-    block(148, floor - 5, 14, 5, 0x444441);
-    block(148, floor - 5, 14, 1, 0x5F5E5A);
-}
 
-void make_sprite(Fish& f, bool left) {
-    int w = FISH_W * f.block, h = FISH_H * f.block;
-    uint32_t* data = (uint32_t*)plat::big_alloc((size_t)w * h * 4);
-    for (int y = 0; y < h; y++) {
-        for (int x = 0; x < w; x++) {
-            int column = x / f.block;
-            char c = FISH_ART[y / f.block][left ? FISH_W - 1 - column : column];
-            uint32_t argb = 0;  // transparent
-            if (c == 'X') argb = 0xFF000000 | f.body;
-            if (c == 'S') argb = 0xFF000000 | f.stripe;
-            if (c == 'o') argb = 0xFF0B0B0B;
-            data[y * w + x] = argb;
-        }
+    tank.update(dt, t);
+    plat::panel_wait(back);  // never draw into the buffer that is on screen
+    tank.bakeClock(gfx, bgDay, bgNight, clockSaveDay, clockSaveNight, clockText);
+    if (USE_WEATHER && SHOW_WEATHER) {
+        tank.bakeWeather(gfx, bgDay, bgNight, wxSaveDay, wxSaveNight, weatherCode, weatherTemp);
     }
-    lv_image_dsc_t& d = f.facing[left ? 1 : 0];
-    memset(&d, 0, sizeof d);
-    d.header.magic = LV_IMAGE_HEADER_MAGIC;
-    d.header.cf = LV_COLOR_FORMAT_ARGB8888;
-    d.header.w = w;
-    d.header.h = h;
-    d.header.stride = w * 4;
-    d.data_size = (uint32_t)w * h * 4;
-    d.data = (const uint8_t*)data;
-}
+    gfx.clean = tank.night ? cleanNight : cleanDay;
+    gfx.beginFrame(back, screens[back], tank.night ? bgNight : bgDay, full);
+    tank.draw(gfx, t, clockText);
+    controls.setLabels(wantNight, tank.weather, (int)(brightnessStep(brightStep) * 100), showClock,
+                       tank.whaleOn);
+    controls.draw(gfx);
+    plat::panel_show(back);
+    if (view) {
+        if (firstFrame) lv_image_set_src(view, &viewDsc);
+        lv_obj_invalidate(view);
+    }
+    back = (back + 1) % screenCount;
+    firstFrame = false;
 
-int swim_y(const Fish& f) {
-    int top = 6, bottom = ART_H - SAND - 4 - FISH_H * f.block / PX;
-    return (int)lv_rand(top, bottom) * PX;
+    frames++;
+    if (now - statAt > 10000) {
+        if (statAt) autoQuality(frames * 1000.0f / (now - statAt));  // skip the start-up window
+        statAt = now;
+        frames = 0;
+    }
 }
-
-void place(Fish& f) { lv_obj_set_pos(f.obj, f.x, f.y); }
 
 }  // namespace
 
 namespace aquarium {
 
 void build(lv_obj_t* t) {
-    scene = (uint16_t*)plat::big_alloc(SCREEN_W * SCREEN_H * 2);
-    paint_scene();
-    memset(&scene_dsc, 0, sizeof scene_dsc);
-    scene_dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
-    scene_dsc.header.cf = LV_COLOR_FORMAT_RGB565;
-    scene_dsc.header.w = SCREEN_W;
-    scene_dsc.header.h = SCREEN_H;
-    scene_dsc.header.stride = SCREEN_W * 2;
-    scene_dsc.data_size = SCREEN_W * SCREEN_H * 2;
-    scene_dsc.data = (const uint8_t*)scene;
-    lv_obj_t* background = lv_image_create(t);
-    lv_image_set_src(background, &scene_dsc);
-    lv_obj_set_pos(background, 0, 0);
+    tile = t;
+    lv_obj_set_style_bg_color(t, lv_color_hex(0x04263F), 0);
+    lv_obj_add_event_cb(
+        t,
+        [](lv_event_t*) {  // a tap, not a swipe: feed, or bring out the buttons
+            lv_point_t p;
+            lv_indev_get_point(lv_indev_active(), &p);
+            if (running) tap(p.x, p.y);
+        },
+        LV_EVENT_SHORT_CLICKED, nullptr);
+    lv_timer_create(frame, 1000 / TARGET_FPS, nullptr);
+}
 
-    for (Bubble& b : bubbles) {
-        b.obj = make_box(t);
-        lv_obj_set_size(b.obj, PX * 2, PX * 2);
-        lv_obj_set_style_border_width(b.obj, PX / 2, 0);
-        lv_obj_set_style_border_color(b.obj, col(C_BLUE), 0);
-        b.y = (int)lv_rand(60, SCREEN_H - SAND * PX - 20);
-        lv_obj_set_pos(b.obj, b.home_x, b.y);
-    }
-
-    int i = 0;
-    for (Fish& f : fishes) {
-        make_sprite(f, false);
-        make_sprite(f, true);
-        f.dir = (i++ % 2) ? -1 : 1;
-        f.x = (int)lv_rand(0, SCREEN_W - FISH_W * f.block) / PX * PX;
-        f.y = swim_y(f);
-        f.obj = lv_image_create(t);
-        lv_image_set_src(f.obj, &f.facing[f.dir < 0 ? 1 : 0]);
-        place(f);
-    }
-
-    clock_lbl = make_label(t, &font_clock_56, C_CLOUD);
-    lv_obj_align(clock_lbl, LV_ALIGN_TOP_RIGHT, -24, 18);
+void update(const Model& model) {
+    weatherCode = model.has_weather ? model.weather_code : -1;
+    weatherTemp = model.has_weather ? (float)model.temp : NAN;
+    sunriseMin = model.sunrise_min;
+    sunsetMin = model.sunset_min;
 }
 
 void tick(bool active) {
-    if (!active) return;
-    ticks++;
-    for (Fish& f : fishes) {
-        f.x += f.dir * f.speed * PX;
-        int w = FISH_W * f.block;
-        if (f.x > SCREEN_W + PX * 6 || f.x < -w - PX * 6) {  // out of sight: turn around
-            f.dir = -f.dir;
-            f.y = swim_y(f);
-            lv_image_set_src(f.obj, &f.facing[f.dir < 0 ? 1 : 0]);
-        }
-        place(f);
-    }
-    for (Bubble& b : bubbles) {
-        b.y -= b.rate * PX / 2;
-        int wobble = ((b.y / 24) % 2) * PX;
-        if (b.y < -PX * 2) b.y = SCREEN_H - SAND * PX - PX * (10 + (int)lv_rand(0, 6));
-        lv_obj_set_pos(b.obj, b.home_x + wobble, b.y);
-    }
-    if (ticks % 10 == 0) {
-        char text[16];
-        app::clock_text(text, sizeof text);
-        if (strcmp(lv_label_get_text(clock_lbl), text) != 0) lv_label_set_text(clock_lbl, text);
+    if (active && !running) {
+        if (!prepare()) return;
+        running = true;
+        needFull = true;  // the rest of the screen has drawn over the tank's buffers
+        lastMs = plat::millis();
+        lastLevel = -1;
+        plat::panel_hold(true);
+    } else if (!active && running) {
+        running = false;
+        plat::panel_hold(false);
+        lv_obj_invalidate(lv_screen_active());
     }
 }
+
+bool running_now() { return running; }
 
 }  // namespace aquarium

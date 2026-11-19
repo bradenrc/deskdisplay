@@ -53,6 +53,7 @@ bool parse_model(const char* json, size_t len, Model& out) {
         m.temp = weather["temp"] | 0;
         m.condition = weather["condition"] | "";
         m.icon = weather["icon"] | "cloudy";
+        m.weather_code = weather["code"] | -1;
         if (!weather["sunrise_label"].isNull()) {
             m.has_today = true;
             m.high = weather["high"] | 0;

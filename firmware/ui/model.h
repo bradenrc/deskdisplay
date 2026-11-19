@@ -55,6 +55,7 @@ struct Model {
     bool has_weather = false;
     bool has_today = false;  // high/low/sunrise/sunset present
     int temp = 0, high = 0, low = 0;
+    int weather_code = -1;  // the weather service's own code for the conditions
     std::string condition, icon, sunrise, sunset;
     int sunrise_min = 7 * 60, sunset_min = 18 * 60;  // minutes after local midnight
     std::vector<Hour> hourly;

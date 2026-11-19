@@ -89,6 +89,14 @@ uint32_t millis() {
 
 void* big_alloc(size_t bytes) { return malloc(bytes); }
 
+// The simulator has no backlight and no panel buffers: the aquarium keeps its own buffer.
+void backlight(int) {}
+bool panel_direct() { return false; }
+int panel_buffers(uint16_t**) { return 0; }
+void panel_wait(int) {}
+void panel_show(int) {}
+void panel_hold(bool) {}
+
 }  // namespace plat
 
 namespace {
@@ -142,7 +150,8 @@ int screenshots(const std::string& dir) {
     const char* const names[] = {"dashboard", "markets", "photo", "aquarium"};
     for (int page = 0; page < app::PAGE_COUNT; page++) {
         app::show_page(page);
-        pump(page == app::PAGE_PHOTO ? 2500 : 1300);
+        // the photo needs time to load; the aquarium, time for its fish to spread out
+        pump(page == app::PAGE_PHOTO ? 2500 : page == app::PAGE_AQUARIUM ? 6000 : 1300);
         lv_refr_now(display);
         std::string path = dir + "/" + names[page] + ".bmp";
         if (!write_bmp(path, frame)) return 1;

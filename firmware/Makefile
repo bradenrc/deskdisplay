@@ -18,7 +18,7 @@ LVGL       := .deps/lvgl
 JSON       := .deps/ArduinoJson
 
 SDL_PREFIX := $(shell sdl2-config --prefix 2>/dev/null)
-INCLUDES   := -I. -Iui -I$(LVGL) -I$(JSON)/src -I$(SDL_PREFIX)/include
+INCLUDES   := -I. -Iui -Itank -I$(LVGL) -I$(JSON)/src -I$(SDL_PREFIX)/include
 DEFINES    := -DLV_CONF_INCLUDE_SIMPLE -DDESK_SIM
 CFLAGS     := -O2 -g $(DEFINES) $(INCLUDES) -Wno-unused-parameter
 CXXFLAGS   := -std=c++17 $(CFLAGS) -Wall
@@ -46,7 +46,7 @@ $(BUILD)/%.o: %.c lv_conf.h
 	@mkdir -p $(dir $@)
 	@$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD)/%.o: %.cpp lv_conf.h $(wildcard ui/*.h)
+$(BUILD)/%.o: %.cpp lv_conf.h $(wildcard ui/*.h) $(wildcard tank/*.h)
 	@mkdir -p $(dir $@)
 	@$(CXX) $(CXXFLAGS) -c $< -o $@
 

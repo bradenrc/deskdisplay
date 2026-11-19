@@ -38,5 +38,7 @@ void tick(bool active);  // once a second
 
 namespace aquarium {
 void build(lv_obj_t* tile);
-void tick(bool active);  // ten times a second
+void update(const Model& model);
+void tick(bool active);  // ten times a second: starts or stops the tank
+bool running_now();
 }  // namespace aquarium

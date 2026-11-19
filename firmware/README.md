@@ -48,6 +48,7 @@ with the mouse to change pages; the mouse acts as the finger.
 | `ui/` | Everything on screen. Shared by the simulator and the device. |
 | `ui/fonts/` | Generated bitmap fonts (Montserrat). Regenerate with `tools/make_fonts.sh`. |
 | `sim/` | Simulator: window, networking through libcurl, screenshots. |
+| `tank/` | The aquarium and the 7B board driver, from Desk_Aquarium. |
 | `fixtures/` | Sample server reply and photo for `make demo` and `make shots`. |
 | `tools/make_fixtures.py` | Regenerates the sample data using the server's own code. |
 | `lv_conf.h` | LVGL settings shared by both targets. |
@@ -63,8 +64,12 @@ millisecond clock, and a large-buffer allocator. The simulator's versions are in
 - **Markets** (`ui/markets.cpp`) draws a card per symbol from the same server reply.
 - **Photo frame** (`ui/photo.cpp`) fetches `/api/photo/next` at the panel size every 30
   seconds while it is the visible page, and decodes the JPEG into one full-screen buffer.
-- **Aquarium** (`ui/aquarium.cpp`) paints the scenery once and moves small fish and bubble
-  objects over it, so only the areas around them are redrawn.
+- **Aquarium** (`ui/aquarium.cpp`) hosts the ASCII-art tank from
+  [Desk_Aquarium](https://github.com/npceight/Desk_Aquarium), which lives in `tank/` (see
+  [tank/README.md](tank/README.md)). The tank has its own drawing engine; on the board it
+  takes over the panel while its page is showing. It follows the real sun for day and night
+  and the real weather for its sky. Tap near the top to feed; tap the left or right edge for
+  its buttons.
 - **Weather icons** (`ui/icons.cpp`) are small shaded pictures stored in
   `ui/weather_icons.c`. `tools/make_weather_icons.py` draws and regenerates them.
 - **The moon** (`ui/moon.cpp`) is one small texture of the moon's face, lit differently for
@@ -73,10 +78,11 @@ millisecond clock, and a large-buffer allocator. The simulator's versions are in
 ## ESP32 target
 
 `esp32/` builds the same `ui/` code for the Waveshare ESP32-S3-Touch-LCD-7B with
-[PlatformIO](https://platformio.org). `esp32/src/main.cpp` holds everything specific to the
-board: panel, touch, Wi-Fi and HTTP.
+[PlatformIO](https://platformio.org). The panel, backlight and touch are driven by
+`tank/board_7b.h`, which was written for this exact board; `esp32/src/main.cpp` adds Wi-Fi,
+HTTP and the glue to the interface.
 
-**Status: it compiles (about 1.6 MB), but has not been run on the board yet.**
+**Status: it compiles (about 2 MB), but has not been run on the board yet.**
 
 ```bash
 cp esp32/src/secrets.example.h esp32/src/secrets.h   # then set Wi-Fi name, password, server address
@@ -86,12 +92,17 @@ cp esp32/src/secrets.example.h esp32/src/secrets.h   # then set Wi-Fi name, pass
 cd esp32 && pio run -t upload && pio device monitor
 ```
 
-Things to expect on first power-up, roughly in order of likelihood:
+Things to know for first power-up:
 
-- **Panel settings.** The display library has no entry for the 7B, so `platformio.ini`
-  selects its 1024×600 sibling, the 5B. If the picture is blank, shifted or flickering,
-  the timing values are the first thing to compare against Waveshare's 7B example.
-- **Picture drift while Wi-Fi is busy.** Set `USE_BOUNCE_BUFFER` to 1 in `main.cpp`.
+- **Use the board's UART port**, not the one labelled USB, and check its small UART
+  selection switch if uploads fail with "No serial data received".
+- **Screen checks.** `tank/README.md` points to the original project, whose README has a
+  step-by-step checklist for a new board (backlight direction, colour order, flicker). The
+  matching settings are at the bottom of `tank/settings.h`: `BACKLIGHT_INVERTED`,
+  `SWAP_RED_BLUE`, `LCD_PCLK_HZ`, and `TOUCH_FLIP_X` / `TOUCH_FLIP_Y`.
+- **Memory is the tight resource.** The panel's two screen buffers, the tank's backgrounds
+  and the photo buffer use about 7 of the board's 8 MB. If the aquarium page stays blank,
+  that is the first thing to suspect.
 - **Brief pauses.** Network requests run on the same thread as the screen, so the display
   freezes for a moment while a photo downloads.
 - **Server address.** `SERVER_URL` must be the server's address on your network. To the

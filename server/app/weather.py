@@ -128,6 +128,7 @@ def view(raw: dict | None, now: datetime, step: int = 2, count: int = 5) -> dict
         "temp": _round(current["temp"]),
         "condition": text,
         "icon": icon,
+        "code": current["code"],
         "hourly": [],
     }
     for hour in pick_hourly(raw["hourly"], now.timestamp(), step, count):

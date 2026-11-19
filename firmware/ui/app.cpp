@@ -19,6 +19,7 @@ bool synced = false;
 
 // Night clock: a black layer over everything, with the time in dark grey.
 constexpr uint32_t SNOOZE_MS = 10 * 60 * 1000;
+constexpr int NIGHT_BACKLIGHT = 12;  // percent
 lv_obj_t *night_box, *night_time, *night_date;
 uint32_t snoozed_at = 0;
 bool snoozed = false, night_forced = false;
@@ -52,9 +53,10 @@ void night_build() {
             lv_obj_add_flag(night_box, LV_OBJ_FLAG_HIDDEN);
         },
         LV_EVENT_PRESSED, nullptr);
-    night_time = make_label(night_box, &font_clock_140, 0x4A4945);
+    // With the backlight turned right down the digits can be drawn brighter and stay gentle.
+    night_time = make_label(night_box, &font_clock_140, 0x8A8780);
     lv_obj_align(night_time, LV_ALIGN_CENTER, 0, -10);
-    night_date = make_label(night_box, &font_text_20, 0x3A3936, "Touch to wake");
+    night_date = make_label(night_box, &font_text_20, 0x5F5E5A, "Touch to wake");
     lv_obj_align(night_date, LV_ALIGN_CENTER, 0, 90);
 }
 
@@ -69,6 +71,7 @@ void poll(lv_timer_t*) {
         synced = true;
         dashboard::update(model);
         markets::update(model);
+        aquarium::update(model);
         night_refresh();
     } else if (!synced) {
         dashboard::set_status("Can't reach the server");
@@ -82,7 +85,22 @@ void every_second(lv_timer_t*) {
     night_refresh();
 }
 
-void every_tenth(lv_timer_t*) { aquarium::tick(app::active_page() == app::PAGE_AQUARIUM); }
+// The aquarium yields to the night clock, which covers every page.
+void every_tenth(lv_timer_t*) {
+    bool night_showing = !lv_obj_has_flag(night_box, LV_OBJ_FLAG_HIDDEN);
+    aquarium::tick(app::active_page() == app::PAGE_AQUARIUM && !night_showing);
+    // Outside the aquarium the backlight is full by day and low behind the night clock.
+    static int applied = -1;
+    if (aquarium::running_now()) {
+        applied = -1;  // the tank sets its own level; reapply ours when it stops
+    } else {
+        int level = night_showing ? NIGHT_BACKLIGHT : 100;
+        if (level != applied) {
+            plat::backlight(level);
+            applied = level;
+        }
+    }
+}
 
 void headline(lv_timer_t*) { dashboard::next_headline(); }
 
