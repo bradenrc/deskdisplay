@@ -323,7 +323,10 @@ def create_app(
     ) -> FileResponse:
         return _photo(pid, w, h, fit)
 
+    from . import start
     from .web import register
 
     register(app, core)
+    default_web = Path(__file__).resolve().parent.parent / "web" / "dist"
+    start.register(app, core, Path(os.environ.get("WEB_DIR", default_web)))
     return app

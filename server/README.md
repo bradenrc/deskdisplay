@@ -112,7 +112,7 @@ every drive and `travel.buffer_minutes` on top.
 | `GET /api/photo/{id}?w=&h=` | A specific photo |
 | `GET /api/photos` | Photo ids and captions |
 | `GET /api/status` | Whether each source is healthy and when it last updated |
-| `GET /` | The browser dashboard: the desk screen's content on one page, with headlines that link to the articles |
+| `GET /` | The start page (see below) |
 | `GET /setup` | The setup page |
 
 Agenda events carry a `status` the screen can style directly: `past`, `now` (in
@@ -137,3 +137,25 @@ uv venv .venv && uv pip install --python .venv/bin/python -r requirements.txt py
 ```bash
 .venv/bin/python -m pytest -q
 ```
+
+## The start page
+
+`http://<server>:8080/` is a personal start page for a browser: a search box, the desk
+screen's panels (agenda, weather, games, snow, markets, photo), and two kinds of widget of
+your own:
+
+- **News feeds**: tabs of RSS feeds. Paste a site or feed address and the server finds the feed.
+- **Links**: bookmarks shown with each site's icon.
+
+**Customize** (top right) turns on editing: drag widgets by their handle, pick one, two
+(even, or one third and two thirds either way) or three columns, add and remove widgets, and
+edit the feeds and links inside them. The page is saved on the server in `data/start.json`,
+so every browser on the network sees the same one. Delete that file to go back to the
+starting layout.
+
+Site icons are fetched once by the server and kept in `data/icons`. Feeds are read by the
+server, only for feeds saved on the page, and only from public web addresses.
+
+It is a React app in `web/`, built when the Docker image is built; the running image has no
+Node in it. To work on it with live reload: `cd web && npm install && npm run dev`, with the
+server running on port 8080.

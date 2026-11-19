@@ -1,3 +1,11 @@
+# Stage 1: build the start page (React). Node is only needed here, not in the running image.
+FROM node:22-slim AS web
+WORKDIR /web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY web/ ./
+RUN npm run build
+
 FROM python:3.13-slim
 
 ENV PYTHONUNBUFFERED=1 \
@@ -13,6 +21,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY --from=rclone/rclone:1 /usr/local/bin/rclone /usr/local/bin/rclone
 
 COPY app ./app
+COPY --from=web /web/dist ./web/dist
 
 RUN useradd --uid 1000 --create-home app \
     && mkdir -p /data /config \

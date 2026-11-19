@@ -8,7 +8,7 @@ from urllib.parse import quote, urlparse
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from . import board, ical
+from . import ical
 from .photos import parse_folder_id
 from .rclone import AUTH_PORT, RcloneError
 
@@ -216,10 +216,6 @@ def _same_site(request: Request) -> None:
 
 
 def register(app: FastAPI, core) -> None:
-    @app.get("/", response_class=HTMLResponse, include_in_schema=False)
-    def root() -> str:
-        return board.PAGE
-
     @app.get("/setup", response_class=HTMLResponse, include_in_schema=False)
     def setup(msg: str = "", err: str = "") -> str:
         return render(core, msg[:300], err[:300])

@@ -1,7 +1,20 @@
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from app import agenda, astro, ical, news, night, snow, sports, stocks, travel, weather
+from app import (
+    agenda,
+    astro,
+    fetch,
+    ical,
+    news,
+    night,
+    snow,
+    sports,
+    start,
+    stocks,
+    travel,
+    weather,
+)
 from app.photos import parse_folder_id
 from app.rclone import extract_token
 
@@ -627,3 +640,55 @@ def test_stocks_view_and_refresh_pacing(monkeypatch):
     assert calls.count("^GSPC") == 4
     assert stocks.view(watch, 5000)["open"] is False
     assert stocks.view(None, 0) is None
+
+
+def test_start_feed_parse_finds_pictures_and_site():
+    rss = b"""<?xml version="1.0"?><rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+    <channel><title>Golf</title><link>https://www.golf.com/</link>
+    <item><title>One</title><link>https://golf.com/1</link>
+      <media:thumbnail url="https://golf.com/1.jpg"/><description>First &lt;b&gt;story&lt;/b&gt;</description></item>
+    <item><title>Two</title><link>https://golf.com/2</link>
+      <description>&lt;img src="https://golf.com/2.jpg?a=1&amp;amp;b=2"&gt; Second</description></item>
+    <item><title>Three</title><link>javascript:alert(1)</link></item></channel></rss>"""
+    feed = start.parse_feed(rss)
+    assert feed["title"] == "Golf" and feed["site"] == "golf.com"
+    one, two, three = feed["items"]
+    assert one["image"] == "https://golf.com/1.jpg" and one["summary"] == "First story"
+    assert (
+        two["image"] == "https://golf.com/2.jpg?a=1&b=2" and two["summary"] == "Second"
+    )
+    assert three["link"] == "" and three["image"] == ""
+
+
+def test_start_finds_feed_and_icon_links_in_a_page():
+    page = """<html><head>
+    <link rel="alternate" type="application/rss+xml" href="/feed/">
+    <link rel="icon" sizes="16x16" href="/small.png">
+    <link rel="apple-touch-icon" href="https://cdn.example.com/touch.png">
+    <link rel="icon" sizes="96x96" href="big.png"><link rel="stylesheet" href="x.css">
+    </head></html>"""
+    assert start.feed_links(page, "https://example.com/a/") == [
+        "https://example.com/feed/"
+    ]
+    assert start.icon_links(page, "https://example.com/a/") == [
+        "https://example.com/a/big.png",
+        "https://cdn.example.com/touch.png",
+        "https://example.com/small.png",
+    ]
+
+
+def test_fetch_refuses_addresses_inside_the_home_network():
+    for host in (
+        "127.0.0.1",
+        "localhost",
+        "192.168.1.10",
+        "10.0.0.5",
+        "169.254.169.254",
+    ):
+        assert not fetch.is_public(host)
+    for url in ("file:///etc/passwd", "ftp://example.com/x", "http://127.0.0.1/"):
+        try:
+            fetch.safe_get(url)
+            raise AssertionError("should have been refused")
+        except fetch.Refused:
+            pass

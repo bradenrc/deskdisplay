@@ -186,11 +186,49 @@ def test_pool_skips_unreadable_files_and_small_folders(tmp_path):
     assert drive.copied.count("Trip/broken.jpg") == tries  # the bad file is not retried
 
 
-def test_home_is_the_browser_dashboard(setup):
+def test_start_page_layout_is_saved_and_checked(setup):
+    _, client, tmp_path = setup
+    assert client.get("/").status_code == 200
+    board = client.get("/api/start").json()
+    assert board["layout"] == "3" and board["widgets"]["news"]["type"] == "feeds"
+
+    board["layout"] = "2-left"
+    board["columns"] = [["links", "nope"], ["news"], []]
+    board["widgets"]["links"]["links"] = [
+        {"name": " Router ", "url": "http://192.168.1.1/"}
+    ]
+    saved = client.put("/api/start", json=board).json()
+    assert saved["columns"][0][:1] == ["links"] and "nope" not in saved["columns"][0]
+    assert "agenda" in saved["columns"][0]  # widgets left out of the columns are kept
+    assert saved["widgets"]["links"]["links"] == [
+        {"name": "Router", "url": "http://192.168.1.1/"}
+    ]
+    assert client.get("/api/start").json() == saved
+    assert (tmp_path / "data" / "start.json").exists()
+
+    board["widgets"]["links"]["links"] = [{"name": "Bad", "url": "javascript:alert(1)"}]
+    assert client.put("/api/start", json=board).status_code == 400
+    board["layout"] = "9"
+    assert client.put("/api/start", json=board).status_code == 400
+    cross = client.put(
+        "/api/start", json=saved, headers={"origin": "https://evil.example"}
+    )
+    assert cross.status_code == 403
+
+
+def test_feeds_and_icons_refuse_what_is_not_on_the_page(setup):
     _, client, _ = setup
-    page = client.get("/")
-    assert page.status_code == 200 and "text/html" in page.headers["content-type"]
-    assert "/api/dashboard" in page.text and 'href="/setup"' in page.text
+    assert (
+        client.get("/api/feed", params={"url": "http://169.254.169.254/"}).status_code
+        == 403
+    )
+    assert client.get("/api/favicon", params={"domain": "localhost"}).status_code == 404
+    assert (
+        client.get("/api/favicon", params={"domain": "../etc/passwd"}).status_code
+        == 404
+    )
+    local = client.post("/api/feed/find", json={"address": "http://127.0.0.1:8080/"})
+    assert local.status_code == 400
 
 
 def test_setup_page_and_forms(setup):
