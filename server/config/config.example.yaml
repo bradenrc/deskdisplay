@@ -71,7 +71,7 @@ sports:
 # page: edit a news-feeds widget and tick "Show on the desk display".
 news:
   refresh_minutes: 15
-  max_items: 12
+  max_items: 150 # the display picks from these at random
 
 photos:
   # The Drive folder is normally chosen on the setup page; this is the fallback.

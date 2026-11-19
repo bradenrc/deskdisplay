@@ -47,7 +47,7 @@ DEFAULTS: dict[str, Any] = {
     },
     "news": {
         "refresh_minutes": 15,
-        "max_items": 12,
+        "max_items": 150,
     },
     "photos": {
         "drive_folder_id": "",

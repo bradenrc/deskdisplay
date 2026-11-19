@@ -217,34 +217,22 @@
     {
       "title": "City council approves new transit plan after months of debate",
       "source": "Example News",
-      "published": 1794850800.0,
-      "summary": "",
-      "age": "12 min ago",
-      "kind": "news"
+      "age": "12 min ago"
     },
     {
       "title": "Chip maker announces new low-power radio for small devices",
       "source": "Example Tech",
-      "published": 1794849120.0,
-      "summary": "",
-      "age": "40 min ago",
-      "kind": "news"
+      "age": "40 min ago"
     },
     {
       "title": "Storm system expected to arrive midweek, bringing the season’s first snow",
       "source": "Example Weather",
-      "published": 1794847620.0,
-      "summary": "",
-      "age": "1 hr ago",
-      "kind": "news"
+      "age": "1 hr ago"
     },
     {
       "title": "Local team wins in overtime",
       "source": "Example Sports",
-      "published": 1794843720.0,
-      "summary": "",
-      "age": "2 hr ago",
-      "kind": "news"
+      "age": "2 hr ago"
     }
   ],
   "games": [

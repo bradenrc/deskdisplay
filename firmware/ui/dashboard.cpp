@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <vector>
 
 #include "app.h"
 #include "icons.h"
@@ -14,7 +15,7 @@ constexpr int MAX_TITLE_LINES = 3;
 constexpr size_t MAX_CHIPS = 3;
 constexpr int CHIP_H = 52;
 constexpr int MOON_SIZE = 56;
-constexpr int NEWS_BTN_W = 44, NEWS_BTN_H = 32, NEWS_PAGER_W = 70;
+constexpr int NEWS_BTN_W = 44, NEWS_BTN_H = 32, NEWS_BTN_GAP = 10;
 // The game cards and the snow tile share one column, so their edges line up.
 constexpr int SIDE_X = 400, SIDE_W = 148;
 
@@ -24,47 +25,96 @@ const char* const MONTHS[] = {"January", "February", "March",     "April",   "Ma
                               "July",    "August",   "September", "October", "November", "December"};
 
 lv_obj_t *date_lbl, *time_lbl, *ampm_lbl;
-lv_obj_t *news_box, *news_src, *news_head, *news_pager, *news_prev, *news_next;
+lv_obj_t *news_box, *news_src, *news_head, *news_prev, *news_next;
 lv_obj_t *chips_box, *snow_box;
 lv_obj_t *today_hdr, *list;
 lv_obj_t *strip_box, *cur_icon, *cur_temp, *cur_cond, *cur_hl, *cur_air, *hour_box;
 lv_obj_t *sunrise_lbl, *sunset_lbl, *moon, *moon_lbl;
 
 Model model;
-size_t news_index = 0, game_index = 0;
+size_t game_index = 0;
 uint32_t last_scroll = 0;
 uint32_t news_hold_until = 0;  // after a tap on the arrows, the headline stays put until then
 constexpr uint32_t NEWS_HOLD_MS = 30000;
 std::string status_text = "Connecting to the server…";
 
+// Headlines are shown in random order. `trail` remembers the ones shown, so the back arrow
+// returns to what was just on screen and a headline does not come round again too soon.
+constexpr size_t TRAIL_MAX = 40;
+std::vector<NewsItem> trail;
+size_t trail_at = 0;
+
+bool in_trail(const std::string& title) {
+    for (const NewsItem& seen : trail) {
+        if (seen.title == title) return true;
+    }
+    return false;
+}
+
+// Adds a headline not seen lately to the end of the trail. False if there is nothing new.
+bool pick_headline() {
+    static bool seeded = false;
+    if (!seeded && model.valid) {
+        srand((unsigned)model.epoch ^ lv_tick_get());
+        seeded = true;
+    }
+    std::vector<size_t> fresh;
+    for (size_t i = 0; i < model.news.size(); i++) {
+        if (!in_trail(model.news[i].title)) fresh.push_back(i);
+    }
+    if (fresh.empty()) {  // everything has been shown: start over, but not with the same one
+        if (model.news.size() < 2) return false;
+        std::string last = trail.empty() ? "" : trail.back().title;
+        trail.clear();
+        for (size_t i = 0; i < model.news.size(); i++) {
+            if (model.news[i].title != last) fresh.push_back(i);
+        }
+    }
+    trail.push_back(model.news[fresh[rand() % fresh.size()]]);
+    if (trail.size() > TRAIL_MAX) trail.erase(trail.begin());
+    return true;
+}
+
 void show_headline() {
-    if (model.news.empty()) {
+    if (trail.empty() && !model.news.empty()) pick_headline();
+    if (trail.empty()) {
         lv_label_set_text(news_src, "News");
         lv_label_set_text(news_head, model.valid ? "No headlines right now" : "");
-        lv_label_set_text(news_pager, "");
         lv_obj_add_flag(news_prev, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(news_next, LV_OBJ_FLAG_HIDDEN);
         return;
     }
-    bool several = model.news.size() > 1;
+    if (trail_at >= trail.size()) trail_at = trail.size() - 1;
+    bool several = model.news.size() > 1 || trail.size() > 1;
     lv_obj_update_flag(news_prev, LV_OBJ_FLAG_HIDDEN, !several);
     lv_obj_update_flag(news_next, LV_OBJ_FLAG_HIDDEN, !several);
-    news_index %= model.news.size();
-    const NewsItem& item = model.news[news_index];
+    lv_obj_set_style_opa(news_prev, trail_at > 0 ? LV_OPA_COVER : LV_OPA_40, 0);  // nothing earlier
+    NewsItem& item = trail[trail_at];
+    for (const NewsItem& latest : model.news) {  // keep "2 hr ago" current
+        if (latest.title == item.title) item.age = latest.age;
+    }
     std::string src = item.source;
     if (!item.age.empty()) src += "  ·  " + item.age;
     lv_label_set_text(news_src, src.c_str());
     lv_label_set_text(news_head, item.title.c_str());
-    lv_label_set_text_fmt(news_pager, "%d / %d", (int)news_index + 1, (int)model.news.size());
+}
+
+// Forward: the next one on the trail, or a new random headline at its end.
+void advance_headline() {
+    if (trail_at + 1 < trail.size()) trail_at++;
+    else if (pick_headline()) trail_at = trail.size() - 1;
+    show_headline();
 }
 
 // A tap on the arrows: one headline back or forward, then hold it there long enough to read.
 void step_headline(int by) {
-    size_t count = model.news.size();
-    if (count < 2) return;
-    news_index = (news_index + count + by) % count;
     news_hold_until = lv_tick_get() + NEWS_HOLD_MS;
-    show_headline();
+    if (by > 0) {
+        advance_headline();
+    } else if (trail_at > 0) {
+        trail_at--;
+        show_headline();
+    }
 }
 
 // A small arrow button for the news tile. The arrow is drawn, so it needs no font glyph.
@@ -395,16 +445,11 @@ void build(lv_obj_t* t) {
     lv_obj_set_pos(news_head, 0, 34);
     lv_obj_set_size(news_head, lv_pct(100), lv_font_get_line_height(&font_text_28) * 4);
     lv_label_set_long_mode(news_head, LV_LABEL_LONG_DOT);
-    // Bottom right: back arrow, "3 / 12", forward arrow.
+    // Bottom right: back and forward arrows.
     news_next = make_arrow(news_box, true);
     lv_obj_align(news_next, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
-    news_pager = make_label(news_box, &font_text_16, C_DIM);
-    lv_obj_set_width(news_pager, NEWS_PAGER_W);
-    lv_obj_set_style_text_align(news_pager, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(news_pager, LV_ALIGN_BOTTOM_RIGHT, -NEWS_BTN_W,
-                 -(NEWS_BTN_H - lv_font_get_line_height(&font_text_16)) / 2);
     news_prev = make_arrow(news_box, false);
-    lv_obj_align(news_prev, LV_ALIGN_BOTTOM_RIGHT, -(NEWS_BTN_W + NEWS_PAGER_W), 0);
+    lv_obj_align(news_prev, LV_ALIGN_BOTTOM_RIGHT, -(NEWS_BTN_W + NEWS_BTN_GAP), 0);
 
     snow_box = make_box(t);
     lv_obj_set_size(snow_box, SIDE_W, NEWS_H);
@@ -522,10 +567,7 @@ void tick() {
 
 void next_headline() {
     bool held = (int32_t)(lv_tick_get() - news_hold_until) < 0;
-    if (model.news.size() > 1 && !held) {
-        news_index++;
-        show_headline();
-    }
+    if (model.news.size() > 1 && !held) advance_headline();
     if (model.games.size() > MAX_CHIPS) {
         game_index = (game_index + 1) % model.games.size();
         show_games();

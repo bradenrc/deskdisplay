@@ -60,7 +60,7 @@ def parse(content: bytes, name: str | None = None) -> list[dict]:
     return items
 
 
-def mix(per_feed: list[list[dict]], max_items: int = 12) -> list[dict]:
+def mix(per_feed: list[list[dict]], max_items: int = 150) -> list[dict]:
     """Takes headlines from each feed in turn, so one busy feed cannot fill the whole list."""
     seen: set[str] = set()
     mixed: list[dict] = []
@@ -72,7 +72,7 @@ def mix(per_feed: list[list[dict]], max_items: int = 12) -> list[dict]:
     return mixed[:max_items]
 
 
-def fetch(feeds: list[dict], max_items: int = 12) -> list[dict]:
+def fetch(feeds: list[dict], max_items: int = 150) -> list[dict]:
     per_feed: list[list[dict]] = []
     for feed in feeds:
         try:
@@ -90,5 +90,6 @@ def view(items: list[dict] | None, now_ts: float | None = None) -> list[dict]:
     out = []
     for item in items or []:
         age = age_label(now_ts - item["published"]) if item["published"] else ""
-        out.append({**item, "age": age, "kind": "news"})
+        # Only what the display draws: it holds the whole list in memory.
+        out.append({"title": item["title"], "source": item["source"], "age": age})
     return out
