@@ -224,10 +224,14 @@ def test_weather_view():
 
 def test_news_parse_and_age():
     rss = b"""<?xml version="1.0"?><rss version="2.0"><channel><title>Example</title>
-    <item><title>First &amp; <b>best</b></title><pubDate>Mon, 16 Nov 2026 17:00:00 GMT</pubDate></item>
+    <item><title>First &amp; <b>best</b></title><link>https://example.com/a?b=1</link>
+    <pubDate>Mon, 16 Nov 2026 17:00:00 GMT</pubDate></item>
+    <item><title>Odd link</title><link>javascript:alert(1)</link></item>
     <item><title></title></item></channel></rss>"""
     items = news.parse(rss, "Example News")
-    assert len(items) == 1 and items[0]["title"] == "First & best"
+    assert len(items) == 2 and items[0]["title"] == "First & best"
+    assert items[0]["link"] == "https://example.com/a?b=1"
+    assert items[1]["link"] == ""  # only web links are passed on
     assert items[0]["source"] == "Example News"
     shown = news.view(items, items[0]["published"] + 12 * 60)
     assert shown[0]["age"] == "12 min ago"

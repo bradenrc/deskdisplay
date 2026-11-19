@@ -8,7 +8,7 @@ from urllib.parse import quote, urlparse
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from . import ical
+from . import board, ical
 from .photos import parse_folder_id
 from .rclone import AUTH_PORT, RcloneError
 
@@ -68,7 +68,7 @@ def render(core, msg: str = "", err: str = "") -> str:
         "<!doctype html><html lang=en><meta charset=utf-8>"
         "<meta name=viewport content='width=device-width,initial-scale=1'>"
         f"<title>Desk companion setup</title><style>{STYLE}</style><main>"
-        "<h1>Desk companion setup</h1>"
+        "<p class=muted><a href=/>&larr; Dashboard</a></p><h1>Desk companion setup</h1>"
         "<p class=muted>This server feeds the desk screen its calendar, photos, news and weather.</p>"
     ]
     if msg:
@@ -216,9 +216,9 @@ def _same_site(request: Request) -> None:
 
 
 def register(app: FastAPI, core) -> None:
-    @app.get("/", include_in_schema=False)
-    def root() -> RedirectResponse:
-        return RedirectResponse("/setup")
+    @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+    def root() -> str:
+        return board.PAGE
 
     @app.get("/setup", response_class=HTMLResponse, include_in_schema=False)
     def setup(msg: str = "", err: str = "") -> str:

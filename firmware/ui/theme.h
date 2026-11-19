@@ -46,6 +46,8 @@ static inline lv_obj_t* make_label(lv_obj_t* parent, const lv_font_t* font, uint
 // Tile colours: each kind of tile has its own flat dark tint, so the screen is not one grey.
 // Flat on purpose: on a 16-bit panel a dark gradient shows visible bands.
 #define C_NEWS_TILE 0x18222E
+#define C_NEWS_BTN 0x25364A       // the arrows on the news tile
+#define C_NEWS_BTN_DOWN 0x35506E
 #define C_SNOW_TILE 0x122A36
 #define C_GAME_TILE 0x23201B
 #define C_LIVE_TILE 0x331A1A

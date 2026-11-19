@@ -186,6 +186,13 @@ def test_pool_skips_unreadable_files_and_small_folders(tmp_path):
     assert drive.copied.count("Trip/broken.jpg") == tries  # the bad file is not retried
 
 
+def test_home_is_the_browser_dashboard(setup):
+    _, client, _ = setup
+    page = client.get("/")
+    assert page.status_code == 200 and "text/html" in page.headers["content-type"]
+    assert "/api/dashboard" in page.text and 'href="/setup"' in page.text
+
+
 def test_setup_page_and_forms(setup):
     app, client, _ = setup
     core = app.state.core

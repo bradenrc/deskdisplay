@@ -34,6 +34,12 @@ def _clean(text: str) -> str:
     ).strip()
 
 
+def _link(url: str) -> str:
+    """Only plain web links are passed on; the browser page turns them into clickable links."""
+    url = (url or "").strip()
+    return url if url.lower().startswith(("http://", "https://")) else ""
+
+
 def parse(content: bytes, name: str | None = None) -> list[dict]:
     feed = feedparser.parse(content)
     source = name or _clean(feed.feed.get("title", "")) or "News"
@@ -49,6 +55,7 @@ def parse(content: bytes, name: str | None = None) -> list[dict]:
                 "source": source,
                 "published": calendar.timegm(stamp) if stamp else None,
                 "summary": _clean(entry.get("summary", ""))[:280],
+                "link": _link(entry.get("link", "")),
             }
         )
     return items

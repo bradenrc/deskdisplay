@@ -14,6 +14,7 @@ constexpr int MAX_TITLE_LINES = 3;
 constexpr size_t MAX_CHIPS = 3;
 constexpr int CHIP_H = 52;
 constexpr int MOON_SIZE = 56;
+constexpr int NEWS_BTN_W = 44, NEWS_BTN_H = 32, NEWS_PAGER_W = 70;
 // The game cards and the snow tile share one column, so their edges line up.
 constexpr int SIDE_X = 400, SIDE_W = 148;
 
@@ -23,7 +24,7 @@ const char* const MONTHS[] = {"January", "February", "March",     "April",   "Ma
                               "July",    "August",   "September", "October", "November", "December"};
 
 lv_obj_t *date_lbl, *time_lbl, *ampm_lbl;
-lv_obj_t *news_box, *news_src, *news_head, *news_pager;
+lv_obj_t *news_box, *news_src, *news_head, *news_pager, *news_prev, *news_next;
 lv_obj_t *chips_box, *snow_box;
 lv_obj_t *today_hdr, *list;
 lv_obj_t *strip_box, *cur_icon, *cur_temp, *cur_cond, *cur_hl, *cur_air, *hour_box;
@@ -32,6 +33,8 @@ lv_obj_t *sunrise_lbl, *sunset_lbl, *moon, *moon_lbl;
 Model model;
 size_t news_index = 0, game_index = 0;
 uint32_t last_scroll = 0;
+uint32_t news_hold_until = 0;  // after a tap on the arrows, the headline stays put until then
+constexpr uint32_t NEWS_HOLD_MS = 30000;
 std::string status_text = "Connecting to the server…";
 
 void show_headline() {
@@ -39,8 +42,13 @@ void show_headline() {
         lv_label_set_text(news_src, "News");
         lv_label_set_text(news_head, model.valid ? "No headlines right now" : "");
         lv_label_set_text(news_pager, "");
+        lv_obj_add_flag(news_prev, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(news_next, LV_OBJ_FLAG_HIDDEN);
         return;
     }
+    bool several = model.news.size() > 1;
+    lv_obj_update_flag(news_prev, LV_OBJ_FLAG_HIDDEN, !several);
+    lv_obj_update_flag(news_next, LV_OBJ_FLAG_HIDDEN, !several);
     news_index %= model.news.size();
     const NewsItem& item = model.news[news_index];
     std::string src = item.source;
@@ -48,6 +56,38 @@ void show_headline() {
     lv_label_set_text(news_src, src.c_str());
     lv_label_set_text(news_head, item.title.c_str());
     lv_label_set_text_fmt(news_pager, "%d / %d", (int)news_index + 1, (int)model.news.size());
+}
+
+// A tap on the arrows: one headline back or forward, then hold it there long enough to read.
+void step_headline(int by) {
+    size_t count = model.news.size();
+    if (count < 2) return;
+    news_index = (news_index + count + by) % count;
+    news_hold_until = lv_tick_get() + NEWS_HOLD_MS;
+    show_headline();
+}
+
+// A small arrow button for the news tile. The arrow is drawn, so it needs no font glyph.
+lv_obj_t* make_arrow(lv_obj_t* parent, bool forward) {
+    static const lv_point_precise_t BACK[] = {{7, 0}, {0, 8}, {7, 16}};
+    static const lv_point_precise_t FORWARD[] = {{0, 0}, {7, 8}, {0, 16}};
+    lv_obj_t* button = make_box(parent);
+    lv_obj_set_size(button, NEWS_BTN_W, NEWS_BTN_H);
+    tint(button, C_NEWS_BTN);
+    lv_obj_set_style_bg_color(button, col(C_NEWS_BTN_DOWN), LV_STATE_PRESSED);
+    lv_obj_set_style_radius(button, 8, 0);
+    lv_obj_add_flag(button, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_ext_click_area(button, 10);  // easier to hit than it looks
+    lv_obj_t* arrow = lv_line_create(button);
+    lv_line_set_points(arrow, forward ? FORWARD : BACK, 3);
+    lv_obj_set_style_line_width(arrow, 3, 0);
+    lv_obj_set_style_line_rounded(arrow, true, 0);
+    lv_obj_set_style_line_color(arrow, col(C_MUTED), 0);
+    lv_obj_center(arrow);
+    lv_obj_add_event_cb(
+        button, [](lv_event_t* e) { step_headline(lv_event_get_user_data(e) ? 1 : -1); },
+        LV_EVENT_SHORT_CLICKED, forward ? (void*)1 : nullptr);
+    return button;
 }
 
 // Up to MAX_CHIPS games in the space beside the clock. With more, the set rotates.
@@ -354,8 +394,16 @@ void build(lv_obj_t* t) {
     lv_obj_set_pos(news_head, 0, 34);
     lv_obj_set_size(news_head, lv_pct(100), lv_font_get_line_height(&font_text_28) * 4);
     lv_label_set_long_mode(news_head, LV_LABEL_LONG_DOT);
-    news_pager = make_label(news_box, &font_text_16, C_FAINT);
-    lv_obj_align(news_pager, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
+    // Bottom right: back arrow, "3 / 12", forward arrow.
+    news_next = make_arrow(news_box, true);
+    lv_obj_align(news_next, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
+    news_pager = make_label(news_box, &font_text_16, C_DIM);
+    lv_obj_set_width(news_pager, NEWS_PAGER_W);
+    lv_obj_set_style_text_align(news_pager, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(news_pager, LV_ALIGN_BOTTOM_RIGHT, -NEWS_BTN_W,
+                 -(NEWS_BTN_H - lv_font_get_line_height(&font_text_16)) / 2);
+    news_prev = make_arrow(news_box, false);
+    lv_obj_align(news_prev, LV_ALIGN_BOTTOM_RIGHT, -(NEWS_BTN_W + NEWS_PAGER_W), 0);
 
     snow_box = make_box(t);
     lv_obj_set_size(snow_box, SIDE_W, NEWS_H);
@@ -472,7 +520,8 @@ void tick() {
 }
 
 void next_headline() {
-    if (model.news.size() > 1) {
+    bool held = (int32_t)(lv_tick_get() - news_hold_until) < 0;
+    if (model.news.size() > 1 && !held) {
         news_index++;
         show_headline();
     }

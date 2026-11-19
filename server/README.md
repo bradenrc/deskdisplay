@@ -112,6 +112,7 @@ every drive and `travel.buffer_minutes` on top.
 | `GET /api/photo/{id}?w=&h=` | A specific photo |
 | `GET /api/photos` | Photo ids and captions |
 | `GET /api/status` | Whether each source is healthy and when it last updated |
+| `GET /` | The browser dashboard: the desk screen's content on one page, with headlines that link to the articles |
 | `GET /setup` | The setup page |
 
 Agenda events carry a `status` the screen can style directly: `past`, `now` (in
