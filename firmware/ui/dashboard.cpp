@@ -231,8 +231,9 @@ void show_agenda() {
     lv_obj_clean(list);
     std::string header = "Today";
     for (const std::string& name : model.all_day) header += "  ·  " + name;
-    lv_label_set_text(today_hdr, header.c_str());
+    lv_label_set_text(today_hdr, model.agenda_hidden ? "" : header.c_str());
 
+    if (model.agenda_hidden) return;
     if (!model.has_agenda) {
         add_note("Add a calendar link on the server's setup page.", C_MUTED);
         return;

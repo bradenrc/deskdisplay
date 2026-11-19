@@ -692,3 +692,13 @@ def test_fetch_refuses_addresses_inside_the_home_network():
             raise AssertionError("should have been refused")
         except fetch.Refused:
             pass
+
+
+def test_news_mix_takes_turns_between_feeds():
+    def items(source, count):
+        return [{"title": f"{source} {n}", "source": source} for n in range(count)]
+
+    mixed = news.mix(
+        [items("A", 10), items("B", 2), [{"title": "a 0", "source": "C"}]], 6
+    )
+    assert [i["title"] for i in mixed] == ["A 0", "B 0", "A 1", "B 1", "A 2", "A 3"]

@@ -67,14 +67,11 @@ sports:
     # - {league: nfl, team: sea, name: Seahawks}
     # - {league: college-football, team: "264", name: Washington}
 
+# Headlines for the desk display's news tile. The feeds themselves are chosen on the start
+# page: edit a news-feeds widget and tick "Show on the desk display".
 news:
   refresh_minutes: 15
   max_items: 12
-  feeds:
-    - name: NPR
-      url: https://feeds.npr.org/1001/rss.xml
-    - name: BBC
-      url: https://feeds.bbci.co.uk/news/rss.xml
 
 photos:
   # The Drive folder is normally chosen on the setup page; this is the fallback.

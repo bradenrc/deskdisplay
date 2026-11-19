@@ -10,7 +10,7 @@ async function json<T>(reply: Response): Promise<T> {
 }
 
 export const getBoard = () => fetch("/api/start").then(r => json<Board>(r));
-export const getDash = () => fetch("/api/dashboard", { cache: "no-store" }).then(r => json<Dash>(r));
+export const getDash = () => fetch("/api/dashboard?view=web", { cache: "no-store" }).then(r => json<Dash>(r));
 export const saveBoard = (board: Board) =>
   fetch("/api/start", {
     method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(board),

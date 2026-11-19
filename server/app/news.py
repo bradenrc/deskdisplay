@@ -9,10 +9,9 @@ import re
 import time
 
 import feedparser
-import requests
+from .fetch import safe_get
 
 log = logging.getLogger("deskpal.news")
-HEADERS = {"User-Agent": "desk-companion/1.0 (RSS reader)"}
 
 
 def age_label(seconds: float) -> str:
@@ -61,27 +60,29 @@ def parse(content: bytes, name: str | None = None) -> list[dict]:
     return items
 
 
+def mix(per_feed: list[list[dict]], max_items: int = 12) -> list[dict]:
+    """Takes headlines from each feed in turn, so one busy feed cannot fill the whole list."""
+    seen: set[str] = set()
+    mixed: list[dict] = []
+    for rank in range(max((len(items) for items in per_feed), default=0)):
+        for items in per_feed:
+            if rank < len(items) and items[rank]["title"].lower() not in seen:
+                seen.add(items[rank]["title"].lower())
+                mixed.append(items[rank])
+    return mixed[:max_items]
+
+
 def fetch(feeds: list[dict], max_items: int = 12) -> list[dict]:
-    items: list[dict] = []
-    failures = 0
+    per_feed: list[list[dict]] = []
     for feed in feeds:
         try:
-            resp = requests.get(feed["url"], headers=HEADERS, timeout=15)
-            resp.raise_for_status()
-            items.extend(parse(resp.content, feed.get("name")))
+            _, _, body = safe_get(feed["url"], timeout=15)
+            per_feed.append(parse(body, feed.get("name")))  # in the feed's own order
         except Exception as exc:
-            failures += 1
             log.warning("feed %s failed: %s", feed.get("url"), exc)
-    if feeds and failures == len(feeds):
+    if feeds and not per_feed:
         raise RuntimeError("no news feed could be read")
-    seen: set[str] = set()
-    unique = []
-    for item in sorted(items, key=lambda i: i["published"] or 0, reverse=True):
-        key = item["title"].lower()
-        if key not in seen:
-            seen.add(key)
-            unique.append(item)
-    return unique[:max_items]
+    return mix(per_feed, max_items)
 
 
 def view(items: list[dict] | None, now_ts: float | None = None) -> list[dict]:

@@ -296,3 +296,33 @@ def test_jobs_wait_until_configured(setup):
     photos = core.status()["sources"]["photos"]
     assert photos["state"] == "idle" and "not connected" in photos["detail"]
     assert core.library.count() == 2  # local photos still work
+
+
+def test_widget_settings_drive_the_desk_display(setup):
+    app, client, _ = setup
+    core = app.state.core
+    core.store.set("agenda", [])
+    board = client.get("/api/start").json()
+    assert board["widgets"]["news"]["desk"] and not board["widgets"]["misc"]["desk"]
+    assert [f["name"] for f in core.board.desk_feeds()][:2] == ["Top stories", "FOX"]
+    shown = client.get("/api/dashboard").json()
+    assert shown["agenda"] is not None and shown["desk"]["agenda"]
+
+    board["widgets"]["agenda"]["desk"] = False
+    board["widgets"]["news"]["desk"] = False
+    board["widgets"]["misc"]["desk"] = True
+    client.put("/api/start", json=board)
+    assert [f["name"] for f in core.board.desk_feeds()][:2] == ["TC", "GC"]
+    device = client.get("/api/dashboard").json()
+    assert device["agenda"] is None and device["desk"]["agenda"] is False
+    web = client.get("/api/dashboard", params={"view": "web"}).json()
+    assert web["agenda"] is not None  # the start page still gets everything
+
+    # A page saved before this setting existed: panels stay on, and the first feeds widget
+    # supplies the display's headlines.
+    for widget in board["widgets"].values():
+        widget.pop("desk", None)
+    saved = client.put("/api/start", json=board).json()
+    assert saved["widgets"]["agenda"]["desk"] and saved["widgets"]["news"]["desk"]
+    assert not saved["widgets"]["misc"]["desk"]
+    assert "desk" not in saved["widgets"]["links"]

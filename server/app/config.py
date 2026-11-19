@@ -48,10 +48,6 @@ DEFAULTS: dict[str, Any] = {
     "news": {
         "refresh_minutes": 15,
         "max_items": 12,
-        "feeds": [
-            {"name": "NPR", "url": "https://feeds.npr.org/1001/rss.xml"},
-            {"name": "BBC", "url": "https://feeds.bbci.co.uk/news/rss.xml"},
-        ],
     },
     "photos": {
         "drive_folder_id": "",

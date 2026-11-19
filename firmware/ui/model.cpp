@@ -35,6 +35,7 @@ bool parse_model(const char* json, size_t len, Model& out) {
     m.utc_offset = doc["time"]["utc_offset_seconds"] | 0;
     if (m.epoch == 0) return false;
 
+    m.agenda_hidden = !(doc["desk"]["agenda"] | true);
     JsonObjectConst agenda = doc["agenda"];
     if (!agenda.isNull()) {
         m.has_agenda = true;

@@ -11,7 +11,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { getBoard, getDash, saveBoard } from "./api";
 import EditDialog from "./EditDialog";
-import type { Board, Dash, Layout, Widget, WidgetType } from "./types";
+import { DESK_TYPES, type Board, type Dash, type Layout, type Widget, type WidgetType } from "./types";
 import { WidgetBody } from "./widgets";
 
 const LAYOUTS: { id: Layout; label: string; bars: number[] }[] = [
@@ -96,6 +96,9 @@ function Frame({ id, widget, editing, onEdit, onRemove, children }: {
       <header>
         {editing && <button className="grip" title="Drag to move" {...attributes} {...listeners}>⠿</button>}
         <h2>{widget.title}</h2>
+        {editing && DESK_TYPES.includes(widget.type) && (
+          <span className={"desk" + (widget.desk ? " on" : "")}>{widget.desk ? "On desk display" : "Not on desk display"}</span>
+        )}
         {editing && (
           <>
             <button title="Edit" onClick={onEdit}>✎</button>
@@ -197,6 +200,7 @@ export default function App() {
   const add = (type: WidgetType, label: string) => {
     const id = `${type}-${Math.random().toString(36).slice(2, 8)}`;
     const widget: Widget = { type, title: label };
+    if (DESK_TYPES.includes(type)) widget.desk = type !== "feeds";
     if (type === "feeds") widget.feeds = [];
     if (type === "links") widget.links = [];
     change(b => ({

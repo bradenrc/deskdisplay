@@ -36,6 +36,9 @@ LAYOUTS = (
     "3",
 )  # 2-left: narrow left column; 2-right: narrow right
 TYPES = ("agenda", "weather", "games", "snow", "markets", "photo", "feeds", "links")
+# Widgets with a "show on the desk display" setting. A feeds widget supplies the display's
+# news tile; the others can be switched off there. The rest of the display is not optional.
+DESK_TYPES = ("agenda", "games", "snow", "feeds")
 MAX_WIDGETS, MAX_FEEDS, MAX_LINKS = 40, 20, 150
 FEED_TTL = 600
 FEED_ITEMS = 20
@@ -67,6 +70,7 @@ DEFAULT = {
         "news": {
             "type": "feeds",
             "title": "News",
+            "desk": True,
             "feeds": [
                 _feed("Top stories", "https://news.google.com/rss", "news.google.com"),
                 _feed("FOX", "http://feeds.foxnews.com/foxnews/latest", "foxnews.com"),
@@ -163,6 +167,9 @@ def clean(board) -> dict:
         if raw.get("type") not in TYPES:
             raise Invalid("Unknown kind of widget")
         widget = {"type": raw["type"], "title": _text(raw.get("title"), 60, "A title")}
+        if widget["type"] in DESK_TYPES:
+            # Unset means: a panel stays on the display, a feeds widget stays off it.
+            widget["desk"] = bool(raw.get("desk", widget["type"] != "feeds"))
         if widget["type"] == "feeds":
             feeds = raw.get("feeds") or []
             if not isinstance(feeds, list) or len(feeds) > MAX_FEEDS:
@@ -193,6 +200,11 @@ def clean(board) -> dict:
                 if isinstance(link, dict)
             ]
         widgets[wid] = widget
+    # A page saved before the desk setting existed: its first feeds widget keeps the display's
+    # news tile supplied.
+    feed_widgets = [w for w in board["widgets"].values() if w.get("type") == "feeds"]
+    if feed_widgets and not any("desk" in w for w in feed_widgets):
+        next(w for w in widgets.values() if w["type"] == "feeds")["desk"] = True
     columns: list[list[str]] = [[], [], []]
     placed: set[str] = set()
     raw_columns = board.get("columns")
@@ -216,7 +228,7 @@ class Board:
             try:
                 return clean(json.loads(self.path.read_text()))
             except (OSError, ValueError):
-                return json.loads(json.dumps(DEFAULT))
+                return clean(DEFAULT)
 
     def save(self, board) -> dict:
         board = clean(board)
@@ -225,6 +237,23 @@ class Board:
             tmp.write_text(json.dumps(board, indent=1))
             tmp.replace(self.path)
         return board
+
+    def desk_feeds(self) -> list[dict]:
+        """The feeds behind the desk display's news tile."""
+        return [
+            feed
+            for widget in self.get()["widgets"].values()
+            if widget["type"] == "feeds" and widget["desk"]
+            for feed in widget["feeds"]
+        ]
+
+    def desk_hidden(self) -> set[str]:
+        """Panels switched off for the desk display."""
+        return {
+            w["type"]
+            for w in self.get()["widgets"].values()
+            if w["type"] != "feeds" and w.get("desk") is False
+        }
 
     def feed_urls(self) -> set[str]:
         return {
@@ -472,10 +501,9 @@ class Icons:
 def register(app, core, web_dir: Path) -> None:
     from .web import _same_site
 
-    board = Board(core.data_dir / "start.json")
+    board = core.board
     feeds = Feeds()
     icons = Icons(core.data_dir / "icons")
-    core.board = board
 
     if (web_dir / "assets").is_dir():
         app.mount("/assets", StaticFiles(directory=web_dir / "assets"), name="assets")
@@ -499,9 +527,11 @@ def register(app, core, web_dir: Path) -> None:
     def put_start(request: Request, layout: dict = Body(...)) -> dict:
         _same_site(request)
         try:
-            return board.save(layout)
+            saved = board.save(layout)
         except Invalid as exc:
             raise HTTPException(400, str(exc)) from exc
+        core.runner.trigger("news")  # the display's headlines may have a new source
+        return saved
 
     @app.get("/api/feed")
     def read_feed(url: str = Query(..., max_length=600)) -> dict:

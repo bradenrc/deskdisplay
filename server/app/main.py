@@ -13,7 +13,19 @@ from zoneinfo import ZoneInfo
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 
-from . import agenda, astro, config, ical, news, night, snow, sports, stocks, weather
+from . import (
+    agenda,
+    astro,
+    config,
+    ical,
+    news,
+    night,
+    snow,
+    sports,
+    start,
+    stocks,
+    weather,
+)
 from .jobs import Runner, Skip, Store
 from .photos import Library
 from .rclone import Rclone
@@ -31,6 +43,7 @@ class Core:
         self.data_dir = data_dir
         self.store = Store()
         self.settings = config.Settings(data_dir / "settings.json")
+        self.board = start.Board(data_dir / "start.json")
         self.library = Library(data_dir / "photos")
         loc = cfg["location"]
         self.travel = (
@@ -144,9 +157,13 @@ class Core:
             raise RuntimeError(f"{failures} ski area(s) could not be read")
 
     def job_news(self) -> None:
-        self.store.set(
-            "news", news.fetch(self.cfg["news"]["feeds"], self.cfg["news"]["max_items"])
-        )
+        feeds = self.board.desk_feeds()
+        if not feeds:
+            self.store.set("news", [])
+            raise Skip(
+                "No feed widget on the start page is set to show on the desk display"
+            )
+        self.store.set("news", news.fetch(feeds, self.cfg["news"]["max_items"]))
 
     def job_agenda(self) -> None:
         urls = self.ical_urls()
@@ -183,9 +200,12 @@ class Core:
 
     # ---- views -------------------------------------------------------------------
 
-    def dashboard(self) -> dict:
+    def dashboard(self, everything: bool = False) -> dict:
+        """What the desk display shows. Panels switched off on the start page are left out,
+        unless `everything` is set (the start page itself asks for it all)."""
         now = datetime.now(self.tz)
-        events = self.store.get("agenda")
+        hidden = set() if everything else self.board.desk_hidden()
+        events = None if "agenda" in hidden else self.store.get("agenda")
         forecast = weather.view(
             self.store.get("weather"),
             now,
@@ -214,12 +234,19 @@ class Core:
             "weather": forecast,
             "moon": astro.moon(now),
             "news": news.view(self.store.get("news"), now.timestamp()),
-            "games": sports.chips(self.sports, now),
+            "games": [] if "games" in hidden else sports.chips(self.sports, now),
             "stocks": stocks.view(self.stocks, now.timestamp()),
             "display": {"clock": str(self.cfg["display"]["clock_color"]).lower()},
-            "snow": snow.reports(
-                self.store.get("ski") or [], now.timestamp(), self.cfg["ski"]["min_new"]
+            "snow": (
+                []
+                if "snow" in hidden
+                else snow.reports(
+                    self.store.get("ski") or [],
+                    now.timestamp(),
+                    self.cfg["ski"]["min_new"],
+                )
             ),
+            "desk": {name: name not in hidden for name in ("agenda", "games", "snow")},
             "night": night.active(now, self.cfg["night"]),
             "photos": {"count": self.library.count()},
         }
@@ -275,8 +302,8 @@ def create_app(
         return core.status()
 
     @app.get("/api/dashboard")
-    def dashboard() -> dict:
-        return core.dashboard()
+    def dashboard(view: str = "") -> dict:
+        return core.dashboard(everything=view == "web")
 
     @app.get("/api/photos")
     def photos() -> dict:
@@ -323,7 +350,6 @@ def create_app(
     ) -> FileResponse:
         return _photo(pid, w, h, fit)
 
-    from . import start
     from .web import register
 
     register(app, core)

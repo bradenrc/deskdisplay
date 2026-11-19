@@ -153,6 +153,13 @@ edit the feeds and links inside them. The page is saved on the server in `data/s
 so every browser on the network sees the same one. Delete that file to go back to the
 starting layout.
 
+**What the desk display shows** is set from the same widgets. Editing a widget offers "Show
+on the desk display" where the display has a matching tile:
+
+- A **news feeds** widget with it ticked supplies the display's news tile. Headlines are taken
+  from its feeds in turn, so one busy feed does not crowd out the rest.
+- **Agenda**, **Games** and **Snow** can be unticked to keep them on the start page only.
+
 Site icons are fetched once by the server and kept in `data/icons`. Feeds are read by the
 server, only for feeds saved on the page, and only from public web addresses.
 

@@ -4,7 +4,10 @@ export type WidgetType =
 
 export interface Feed { name: string; url: string; site: string }
 export interface LinkItem { name: string; url: string }
-export interface Widget { type: WidgetType; title: string; feeds?: Feed[]; links?: LinkItem[] }
+// desk: whether the desk display shows it too (agenda, games, snow), or for a feeds widget
+// whether its feeds supply the display's news tile.
+export interface Widget { type: WidgetType; title: string; desk?: boolean; feeds?: Feed[]; links?: LinkItem[] }
+export const DESK_TYPES: WidgetType[] = ["agenda", "games", "snow", "feeds"];
 export interface Board { layout: Layout; columns: string[][]; widgets: Record<string, Widget> }
 
 export interface FeedItem {

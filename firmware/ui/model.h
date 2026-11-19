@@ -47,6 +47,7 @@ struct Model {
     int utc_offset = 0;   // seconds; lets the device show local time without a timezone table
 
     bool has_agenda = false;  // false until a calendar link is added on the server
+    bool agenda_hidden = false;  // switched off for this screen on the start page
     std::vector<Event> events;
     std::vector<Event> tomorrow;
     std::vector<std::string> all_day;

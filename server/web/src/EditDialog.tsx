@@ -1,7 +1,7 @@
 // The edit window for one widget: its title, and for feed and link widgets the list inside.
 import { useState } from "react";
 import { findFeed, hostOf, isWeb } from "./api";
-import type { Feed, LinkItem, Widget } from "./types";
+import { DESK_TYPES, type Feed, type LinkItem, type Widget } from "./types";
 import { Favicon } from "./widgets";
 
 function move<T>(list: T[], from: number, by: number): T[] {
@@ -28,6 +28,8 @@ export default function EditDialog({ widget, onSave, onCancel }: {
   widget: Widget; onSave: (w: Widget) => void; onCancel: () => void;
 }) {
   const [title, setTitle] = useState(widget.title);
+  const [desk, setDesk] = useState(widget.desk ?? widget.type !== "feeds");
+  const onDesk = DESK_TYPES.includes(widget.type);
   const [feeds, setFeeds] = useState<Feed[]>(widget.feeds || []);
   const [links, setLinks] = useState<LinkItem[]>(widget.links || []);
   const [address, setAddress] = useState("");
@@ -66,6 +68,7 @@ export default function EditDialog({ widget, onSave, onCancel }: {
   const add = widget.type === "feeds" ? addFeed : addLink;
   const save = () => {
     const next: Widget = { type: widget.type, title: title.trim() || widget.title };
+    if (onDesk) next.desk = desk;
     if (widget.type === "feeds") next.feeds = feeds.filter(f => f.name.trim());
     if (widget.type === "links") next.links = links.filter(l => l.name.trim() && isWeb(l.url));
     onSave(next);
@@ -77,6 +80,19 @@ export default function EditDialog({ widget, onSave, onCancel }: {
       <form className="dialog" onSubmit={e => { e.preventDefault(); save(); }}>
         <h2>Edit widget</h2>
         <label>Title<input value={title} maxLength={60} onChange={e => setTitle(e.target.value)} /></label>
+        {onDesk && (
+          <label className="check">
+            <input type="checkbox" checked={desk} onChange={e => setDesk(e.target.checked)} />
+            <span>
+              Show on the desk display
+              <small>
+                {widget.type === "feeds"
+                  ? "These feeds supply the headlines in the display's news tile."
+                  : "Untick to keep this on the start page only."}
+              </small>
+            </span>
+          </label>
+        )}
 
         {widget.type !== "feeds" && widget.type !== "links" ? null : (
           <>

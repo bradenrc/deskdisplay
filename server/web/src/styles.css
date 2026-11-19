@@ -152,6 +152,11 @@ footer { margin-top: 24px; color: var(--dim); font-size: 13px; }
 .dialog h2 { margin: 0 0 14px; font-size: 18px; }
 .dialog label { display: flex; align-items: center; gap: 12px; color: var(--muted); }
 .dialog label input { flex: 1; color: var(--text); }
+.dialog label.check { align-items: flex-start; margin-top: 14px; color: var(--text); cursor: pointer; }
+.dialog label.check input { flex: none; margin-top: 4px; width: 16px; height: 16px; }
+.dialog label.check small { display: block; color: var(--dim); }
+.desk { font-size: 12px; color: var(--dim); white-space: nowrap; }
+.desk.on { color: var(--green); }
 .adder { display: flex; gap: 8px; margin-top: 14px; }
 .adder input { flex: 1; }
 .rows { margin: 12px 0; max-height: 48vh; overflow: auto; }
