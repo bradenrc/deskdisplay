@@ -183,6 +183,12 @@ on the desk display" where the display has a matching tile:
   from its feeds in turn, so one busy feed does not crowd out the rest.
 - **Agenda**, **Games** and **Snow** can be unticked to keep them on the start page only.
 
+**Changing screens by itself.** Under Customize, **Desk display…** sets which of the display's
+screens (Home, Tasks, Markets, Photo, Aquarium) it moves through and how long each stays up,
+from 15 seconds to 30 minutes, or not at all. A touch holds the display on the current screen
+for at least a minute. Unticked screens can still be reached by swiping, and with a single
+screen ticked the display returns to it. The choice is kept in `data/settings.json`.
+
 Site icons are fetched once by the server and kept in `data/icons`. Feeds are read by the
 server, only for feeds saved on the page, and only from public web addresses.
 

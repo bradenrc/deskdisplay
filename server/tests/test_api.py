@@ -561,3 +561,28 @@ def test_tasks_two_accounts(setup, monkeypatch):
 
     client.post("/tasks/disconnect", data={"name": "Home"})
     assert core.tasks.accounts() == [] and core.tasks.configured()
+
+
+def test_display_rotation_setting(setup):
+    _, client, _ = setup
+    assert client.get("/api/display").json() == {"seconds": 0, "screens": ["dashboard"]}
+    saved = client.put(
+        "/api/display",
+        json={"seconds": 45, "screens": ["photo", "nonsense", "dashboard"]},
+    ).json()
+    assert saved == {
+        "seconds": 45,
+        "screens": ["dashboard", "photo"],
+    }  # in screen order
+    assert client.get("/api/dashboard").json()["display"]["rotation"] == saved
+    assert client.put("/api/display", json={"seconds": 3, "screens": []}).json() == {
+        "seconds": 10,
+        "screens": ["dashboard"],
+    }
+    assert client.put("/api/display", json={"seconds": "x"}).json()["seconds"] == 0
+    refused = client.put(
+        "/api/display",
+        json={"seconds": 30},
+        headers={"origin": "http://elsewhere.example"},
+    )
+    assert refused.status_code == 403

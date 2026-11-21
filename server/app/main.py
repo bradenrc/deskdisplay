@@ -251,7 +251,10 @@ class Core:
             "news": news.view(self.store.get("news"), now.timestamp()),
             "games": [] if "games" in hidden else sports.chips(self.sports, now),
             "stocks": stocks.view(self.stocks, now.timestamp()),
-            "display": {"clock": str(self.cfg["display"]["clock_color"]).lower()},
+            "display": {
+                "clock": str(self.cfg["display"]["clock_color"]).lower(),
+                "rotation": start.clean_rotation(self.settings.get("rotation")),
+            },
             "snow": (
                 []
                 if "snow" in hidden

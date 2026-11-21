@@ -82,6 +82,8 @@ struct Model {
     int tasks_total = 0;  // open tasks in all, which may be more than were sent
     bool market_open = false;
     std::string clock_mode = "sun";  // "sun", "white" or "#rrggbb"
+    int rotate_seconds = 0;  // how long each screen stays up; 0 = stays where it is put
+    std::vector<std::string> rotate_screens;  // the screens to move through, by name
     std::vector<Snow> snow;  // empty unless there has been new snow in the last 48 hours
     int photo_count = 0;
     bool night = false;  // server says it is quiet hours

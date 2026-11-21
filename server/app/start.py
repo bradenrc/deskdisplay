@@ -508,6 +508,26 @@ class Icons:
 # ---- routes ----------------------------------------------------------------------
 
 
+# The desk display's screens, in the order they sit side by side.
+SCREENS = ("dashboard", "tasks", "markets", "photo", "aquarium")
+ROTATE_MIN, ROTATE_MAX = 10, 3600
+
+
+def clean_rotation(raw) -> dict:
+    """Which screens the desk display moves through by itself, and how long each stays up.
+    seconds 0 means it stays where it is put."""
+    raw = raw if isinstance(raw, dict) else {}
+    try:
+        seconds = int(raw.get("seconds") or 0)
+    except (TypeError, ValueError):
+        seconds = 0
+    if seconds:
+        seconds = max(ROTATE_MIN, min(ROTATE_MAX, seconds))
+    wanted = raw.get("screens") if isinstance(raw.get("screens"), list) else []
+    screens = [name for name in SCREENS if name in wanted]
+    return {"seconds": seconds, "screens": screens or ["dashboard"]}
+
+
 def register(app, core, web_dir: Path) -> None:
     from .web import _same_site
 
@@ -532,6 +552,17 @@ def register(app, core, web_dir: Path) -> None:
     @app.get("/api/start")
     def get_start() -> dict:
         return board.get()
+
+    @app.get("/api/display")
+    def get_display() -> dict:
+        return clean_rotation(core.settings.get("rotation"))
+
+    @app.put("/api/display")
+    def put_display(request: Request, body: dict = Body(...)) -> dict:
+        _same_site(request)
+        rotation = clean_rotation(body)
+        core.settings.set("rotation", rotation)
+        return rotation
 
     @app.put("/api/start")
     def put_start(request: Request, layout: dict = Body(...)) -> dict:

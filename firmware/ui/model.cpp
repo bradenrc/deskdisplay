@@ -140,6 +140,10 @@ bool parse_model(const char* json, size_t len, Model& out) {
         }
     }
     m.clock_mode = doc["display"]["clock"] | "sun";
+    m.rotate_seconds = doc["display"]["rotation"]["seconds"] | 0;
+    for (JsonVariantConst name : doc["display"]["rotation"]["screens"].as<JsonArrayConst>()) {
+        m.rotate_screens.push_back(name | "");
+    }
     for (JsonObjectConst s : doc["snow"].as<JsonArrayConst>()) {
         Snow spot;
         spot.name = s["name"] | "";

@@ -10,6 +10,9 @@ export interface Widget { type: WidgetType; title: string; desk?: boolean; feeds
 export const DESK_TYPES: WidgetType[] = ["agenda", "games", "snow", "feeds"];
 export interface Board { layout: Layout; columns: string[][]; widgets: Record<string, Widget> }
 
+// The desk display's own screen changes: seconds 0 means it stays where it is put.
+export interface Rotation { seconds: number; screens: string[] }
+
 export interface FeedItem {
   title: string; link: string; summary: string; image: string; age: string;
 }

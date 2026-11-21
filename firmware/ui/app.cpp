@@ -60,6 +60,45 @@ void night_build() {
     lv_obj_align(night_date, LV_ALIGN_CENTER, 0, 90);
 }
 
+// Moves through the screens chosen on the start page, each staying up for the set time.
+// A touch holds the screen where it is for a while, so it never changes under a finger.
+const char* const PAGE_NAMES[app::PAGE_COUNT] = {"dashboard", "tasks", "markets", "photo", "aquarium"};
+constexpr uint32_t TOUCH_HOLD_MS = 60 * 1000;
+uint32_t page_since = 0;
+int page_seen = 0;
+
+void rotate() {
+    int current = app::active_page();
+    if (current != page_seen) {  // a swipe, or our own change: the time starts again
+        page_seen = current;
+        page_since = plat::millis();
+    }
+    if (model.rotate_seconds <= 0 || !lv_obj_has_flag(night_box, LV_OBJ_FLAG_HIDDEN)) return;
+    uint32_t stay = (uint32_t)model.rotate_seconds * 1000;
+    if (plat::millis() - page_since < stay) return;
+    if (lv_display_get_inactive_time(nullptr) < LV_MAX(stay, TOUCH_HOLD_MS)) return;
+
+    int order[app::PAGE_COUNT], count = 0, at = -1;
+    for (const std::string& name : model.rotate_screens) {
+        for (int i = 0; i < app::PAGE_COUNT && count < app::PAGE_COUNT; i++) {
+            if (name == PAGE_NAMES[i]) {
+                if (i == current) at = count;
+                order[count++] = i;
+            }
+        }
+    }
+    if (count == 0) return;
+    int next = order[(at + 1) % count];  // from a screen outside the list: back to the first
+    if (next == current) return;
+#ifdef DESK_SIM
+    printf("screen: %s -> %s\n", PAGE_NAMES[current], PAGE_NAMES[next]);
+    fflush(stdout);
+#endif
+    lv_tileview_set_tile_by_index(tileview, next, 0, LV_ANIM_ON);
+    page_seen = next;
+    page_since = plat::millis();
+}
+
 void poll(lv_timer_t*) {
     std::vector<uint8_t> body;
     Model fresh;
@@ -85,6 +124,7 @@ void every_second(lv_timer_t*) {
     markets::tick(app::active_page() == app::PAGE_MARKETS);
     photo::tick(app::active_page() == app::PAGE_PHOTO);
     night_refresh();
+    rotate();
 }
 
 // The aquarium yields to the night clock, which covers every page.
@@ -138,7 +178,10 @@ void init() {
 }
 
 void show_page(int index) {
-    if (index >= 0 && index < PAGE_COUNT) lv_tileview_set_tile_by_index(tileview, index, 0, LV_ANIM_OFF);
+    if (index < 0 || index >= PAGE_COUNT) return;
+    lv_tileview_set_tile_by_index(tileview, index, 0, LV_ANIM_OFF);
+    page_seen = index;
+    page_since = plat::millis();
 }
 
 int active_page() {

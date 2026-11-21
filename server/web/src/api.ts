@@ -1,4 +1,4 @@
-import type { Board, Dash, Feed, FeedReply } from "./types";
+import type { Board, Dash, Feed, FeedReply, Rotation } from "./types";
 
 async function json<T>(reply: Response): Promise<T> {
   if (!reply.ok) {
@@ -15,6 +15,11 @@ export const saveBoard = (board: Board) =>
   fetch("/api/start", {
     method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(board),
   }).then(r => json<Board>(r));
+export const getDisplay = () => fetch("/api/display").then(r => json<Rotation>(r));
+export const saveDisplay = (rotation: Rotation) =>
+  fetch("/api/display", {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(rotation),
+  }).then(r => json<Rotation>(r));
 export const findFeed = (address: string) =>
   fetch("/api/feed/find", {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ address }),

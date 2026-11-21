@@ -10,6 +10,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { getBoard, getDash, saveBoard } from "./api";
+import DisplayDialog from "./DisplayDialog";
 import EditDialog from "./EditDialog";
 import { DESK_TYPES, type Board, type Dash, type Layout, type Widget, type WidgetType } from "./types";
 import { WidgetBody } from "./widgets";
@@ -118,6 +119,7 @@ export default function App() {
   const [editing, setEditing] = useState(false);
   const [dialog, setDialog] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [display, setDisplay] = useState(false);
   const [problem, setProblem] = useState("");
   const dirty = useRef(false);
 
@@ -242,6 +244,7 @@ export default function App() {
               </span>
             )}
           </span>
+          <button onClick={() => setDisplay(true)}>Desk display…</button>
           <span className="hint">Drag a widget by its ⠿ handle to move it.</span>
         </div>
       )}
@@ -265,6 +268,7 @@ export default function App() {
 
       <footer><a href="/setup">Server setup</a></footer>
 
+      {display && <DisplayDialog onClose={() => setDisplay(false)} />}
       {dialog && board.widgets[dialog] && (
         <EditDialog widget={board.widgets[dialog]} onCancel={() => setDialog(null)}
           onSave={w => {
