@@ -73,6 +73,11 @@ news:
   refresh_minutes: 15
   max_items: 150 # the display picks from these at random
 
+# Google Tasks. Connected on the setup page; these are the only settings.
+tasks:
+  refresh_minutes: 5
+  display_max: 40 # how many open tasks the desk display is sent
+
 photos:
   # The Drive folder is normally chosen on the setup page; this is the fallback.
   drive_folder_id: ""

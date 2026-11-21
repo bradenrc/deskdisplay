@@ -118,6 +118,25 @@ bool parse_model(const char* json, size_t len, Model& out) {
         for (JsonVariantConst p : q["points"].as<JsonArrayConst>()) stock.points.push_back((uint8_t)(p | 0));
         m.stocks.push_back(stock);
     }
+    JsonObjectConst tasks = doc["tasks"];
+    if (!tasks.isNull()) {
+        m.has_tasks = true;
+        m.tasks_total = tasks["total"] | 0;
+        for (JsonObjectConst list : tasks["lists"].as<JsonArrayConst>()) {
+            TaskRow name;
+            name.header = true;
+            name.title = list["title"] | "";
+            m.tasks.push_back(name);
+            for (JsonObjectConst t : list["items"].as<JsonArrayConst>()) {
+                TaskRow row;
+                row.title = t["title"] | "";
+                row.due = t["due"] | "";
+                row.tone = t["tone"] | "";
+                row.indent = t["indent"] | 0;
+                m.tasks.push_back(row);
+            }
+        }
+    }
     m.clock_mode = doc["display"]["clock"] | "sun";
     for (JsonObjectConst s : doc["snow"].as<JsonArrayConst>()) {
         Snow spot;

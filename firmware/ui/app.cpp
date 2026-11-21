@@ -70,6 +70,7 @@ void poll(lv_timer_t*) {
         sync_ms = plat::millis();
         synced = true;
         dashboard::update(model);
+        tasks::update(model);
         markets::update(model);
         aquarium::update(model);
         night_refresh();
@@ -80,6 +81,7 @@ void poll(lv_timer_t*) {
 
 void every_second(lv_timer_t*) {
     dashboard::tick();
+    tasks::tick(app::active_page() == app::PAGE_TASKS);
     markets::tick(app::active_page() == app::PAGE_MARKETS);
     photo::tick(app::active_page() == app::PAGE_PHOTO);
     night_refresh();
@@ -123,6 +125,7 @@ void init() {
         lv_obj_set_style_bg_opa(tiles[i], LV_OPA_COVER, 0);
     }
     dashboard::build(tiles[PAGE_DASHBOARD]);
+    tasks::build(tiles[PAGE_TASKS]);
     markets::build(tiles[PAGE_MARKETS]);
     photo::build(tiles[PAGE_PHOTO]);
     aquarium::build(tiles[PAGE_AQUARIUM]);

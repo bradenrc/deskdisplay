@@ -702,3 +702,46 @@ def test_news_mix_takes_turns_between_feeds():
         [items("A", 10), items("B", 2), [{"title": "a 0", "source": "C"}]], 6
     )
     assert [i["title"] for i in mixed] == ["A 0", "B 0", "A 1", "B 1", "A 2", "A 3"]
+
+
+def test_task_due_labels():
+    from datetime import date
+
+    from app.gtasks import due_label
+
+    today = date(2026, 11, 20)
+    assert due_label("2026-11-20", today) == ("Today", "today")
+    assert due_label("2026-11-21", today) == ("Tomorrow", "soon")
+    assert due_label("2026-11-19", today) == ("Yesterday", "late")
+    assert due_label("2026-11-24", today) == ("Tuesday", "")
+    assert due_label("2026-11-02", today) == ("Nov 2", "late")
+    assert due_label("2026-12-04", today) == ("Dec 4", "")
+    assert due_label("2027-01-05", today) == ("Jan 5, 2027", "")
+    assert due_label("", today) == ("", "")
+
+
+def test_task_view_limit_counts_what_is_left_out():
+    from datetime import date
+
+    from app.gtasks import view
+
+    def task(n):
+        return {
+            "id": str(n),
+            "title": f"T{n}",
+            "notes": "",
+            "due": "",
+            "parent": "",
+            "position": f"{n:03d}",
+            "link": "javascript:alert(1)",
+        }
+
+    lists = [
+        {"title": "A", "tasks": [task(n) for n in range(5)]},
+        {"title": "B", "tasks": [task(n) for n in range(5)]},
+    ]
+    out = view(lists, date(2026, 11, 20), 7, full=True)
+    assert out["total"] == 10 and out["more"] == 3
+    assert [len(entry["items"]) for entry in out["lists"]] == [5, 2]
+    assert out["lists"][0]["items"][0]["link"] == ""  # only https links are passed on
+    assert view(None, date(2026, 11, 20), 7, full=False) is None

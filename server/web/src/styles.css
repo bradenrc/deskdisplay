@@ -167,3 +167,13 @@ footer { margin-top: 24px; color: var(--dim); font-size: 13px; }
 .rowbuttons { display: flex; gap: 4px; }
 .rowbuttons button { padding: 2px 9px; }
 .actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* tasks */
+.task { display: flex; align-items: center; gap: 10px; padding: 4px 0; text-decoration: none; color: inherit; }
+.task.sub { padding-left: 26px; }
+.task .ring { flex: none; width: 15px; height: 15px; border-radius: 50%; border: 1.5px solid var(--dim); }
+.task .name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.task i { flex: none; font-size: 13px; font-style: normal; color: var(--dim); white-space: nowrap; }
+.task i.late { color: var(--redtext); }
+.task i.today { color: var(--ambertext); }
+.widget.tasks h3:first-child { margin-top: 4px; }

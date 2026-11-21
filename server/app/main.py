@@ -17,6 +17,7 @@ from . import (
     agenda,
     astro,
     config,
+    gtasks,
     ical,
     news,
     night,
@@ -45,6 +46,7 @@ class Core:
         self.settings = config.Settings(data_dir / "settings.json")
         self.board = start.Board(data_dir / "start.json")
         self.library = Library(data_dir / "photos")
+        self.tasks = gtasks.Account(data_dir / "google_tasks.json")
         loc = cfg["location"]
         self.travel = (
             Travel(
@@ -78,6 +80,7 @@ class Core:
                 ("news", self.job_news, cfg["news"]["refresh_minutes"]),
                 ("agenda", self.job_agenda, cfg["agenda"]["refresh_minutes"]),
                 ("photos", self.job_photos, cfg["photos"]["refresh_minutes"]),
+                ("tasks", self.job_tasks, cfg["tasks"]["refresh_minutes"]),
                 *(
                     [("ski", self.job_ski, cfg["ski"]["refresh_minutes"])]
                     if cfg["ski"]["resorts"]
@@ -175,6 +178,19 @@ class Core:
             self.travel.annotate(events)
         self.store.set("agenda", events)
 
+    def job_tasks(self) -> None:
+        if not self.tasks.connected():
+            self.store.drop("tasks")
+            raise Skip("Google Tasks not connected")
+        try:
+            self.store.set("tasks", self.tasks.fetch())
+        except gtasks.TasksError:
+            if (
+                not self.tasks.connected()
+            ):  # Google ended the sign-in: show nothing stale
+                self.store.drop("tasks")
+            raise
+
     def job_photos(self) -> None:
         photos_cfg = self.cfg["photos"]
         self.library.sync_local(photos_cfg["local_dir"])
@@ -247,6 +263,12 @@ class Core:
                 )
             ),
             "desk": {name: name not in hidden for name in ("agenda", "games", "snow")},
+            "tasks": gtasks.view(
+                self.store.get("tasks"),
+                now.date(),
+                200 if everything else self.cfg["tasks"]["display_max"],
+                full=everything,
+            ),
             "night": night.active(now, self.cfg["night"]),
             "photos": {"count": self.library.count()},
         }
@@ -265,6 +287,7 @@ class Core:
             "calendar_links": len(self.ical_urls()),
             "drive_connected": self.drive.connected(),
             "drive_folder": bool(self.drive_folder_id()),
+            "tasks_connected": self.tasks.connected(),
             "photos": self.library.count(),
             "photos_in_drive_folder": self.library.catalog_size,
             "sources": sources,

@@ -198,6 +198,29 @@ function Photo({ dash }: { dash: Dash }) {
   );
 }
 
+function Tasks({ dash }: { dash: Dash }) {
+  const t = dash.tasks;
+  if (!t) return <p className="empty">Google Tasks isn't connected yet. <a href="/setup">Set it up</a>.</p>;
+  if (!t.lists.length) return <p className="empty">No open tasks.</p>;
+  return (
+    <>
+      {t.lists.map((list, n) => (
+        <div key={n}>
+          {(t.lists.length > 1 || n > 0) && <h3>{list.title}</h3>}
+          {list.items.map((item, i) => (
+            <a className={"task" + (item.indent ? " sub" : "")} key={i} title={item.notes || undefined}
+              href={isWeb(item.link || "") ? item.link : undefined} target="_blank" rel="noopener noreferrer">
+              <span className="ring" /><span className="name">{item.title}</span>
+              {item.due && <i className={item.tone}>{item.due}</i>}
+            </a>
+          ))}
+        </div>
+      ))}
+      {t.more > 0 && <p className="empty">and {t.more} more</p>}
+    </>
+  );
+}
+
 function Feeds({ id, widget }: { id: string; widget: Widget }) {
   const feeds = widget.feeds || [];
   const key = "tab:" + id;
@@ -278,6 +301,7 @@ export function WidgetBody({ id, widget, dash }: { id: string; widget: Widget; d
     case "weather": return <Weather dash={dash} />;
     case "games": return <Games dash={dash} />;
     case "snow": return <Snow dash={dash} />;
+    case "tasks": return <Tasks dash={dash} />;
     case "markets": return <Markets dash={dash} />;
     case "photo": return <Photo dash={dash} />;
   }

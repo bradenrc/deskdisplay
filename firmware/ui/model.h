@@ -41,6 +41,13 @@ struct Stock {
     int baseline = -1;                           // yesterday's close on that scale
 };
 
+// One line on the tasks page: the name of a list, or a task in it.
+struct TaskRow {
+    std::string title, due, tone;  // tone: late | today | soon | ""
+    bool header = false;
+    int indent = 0;  // 1 for a subtask
+};
+
 struct Model {
     bool valid = false;
     long long epoch = 0;  // server time when this was fetched
@@ -70,6 +77,9 @@ struct Model {
     std::vector<NewsItem> news;
     std::vector<Game> games;
     std::vector<Stock> stocks;
+    bool has_tasks = false;  // false until Google Tasks is connected on the server
+    std::vector<TaskRow> tasks;
+    int tasks_total = 0;  // open tasks in all, which may be more than were sent
     bool market_open = false;
     std::string clock_mode = "sun";  // "sun", "white" or "#rrggbb"
     std::vector<Snow> snow;  // empty unless there has been new snow in the last 48 hours

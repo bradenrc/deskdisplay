@@ -31,6 +31,7 @@ const KINDS: { type: WidgetType; label: string; many?: boolean }[] = [
   { type: "feeds", label: "News feeds", many: true },
   { type: "links", label: "Links", many: true },
   { type: "agenda", label: "Agenda" },
+  { type: "tasks", label: "Tasks" },
   { type: "weather", label: "Weather" },
   { type: "games", label: "Games" },
   { type: "snow", label: "Snow" },

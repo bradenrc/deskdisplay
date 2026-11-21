@@ -147,7 +147,7 @@ int screenshots(const std::string& dir) {
     });
     app::init();
     mkdir(dir.c_str(), 0755);
-    const char* const names[] = {"dashboard", "markets", "photo", "aquarium"};
+    const char* const names[] = {"dashboard", "tasks", "markets", "photo", "aquarium"};
     for (int page = 0; page < app::PAGE_COUNT; page++) {
         app::show_page(page);
         // the photo needs time to load; the aquarium, time for its fish to spread out

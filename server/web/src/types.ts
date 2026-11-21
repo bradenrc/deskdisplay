@@ -1,6 +1,6 @@
 export type Layout = "1" | "2" | "2-left" | "2-right" | "3";
 export type WidgetType =
-  | "agenda" | "weather" | "games" | "snow" | "markets" | "photo" | "feeds" | "links";
+  | "agenda" | "weather" | "games" | "snow" | "markets" | "photo" | "tasks" | "feeds" | "links";
 
 export interface Feed { name: string; url: string; site: string }
 export interface LinkItem { name: string; url: string }
@@ -39,6 +39,11 @@ export interface Dash {
     open: boolean;
     items: { symbol: string; name: string; price: string; change: string; direction: string;
       points: number[]; baseline: number | null }[];
+  };
+  // null until Google Tasks is connected on the setup page
+  tasks: null | {
+    lists: { title: string; items: { title: string; due: string; tone: string; indent: number; notes?: string; link?: string }[] }[];
+    total: number; more: number;
   };
   photos: { count: number };
 }

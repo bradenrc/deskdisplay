@@ -35,7 +35,17 @@ LAYOUTS = (
     "2-right",
     "3",
 )  # 2-left: narrow left column; 2-right: narrow right
-TYPES = ("agenda", "weather", "games", "snow", "markets", "photo", "feeds", "links")
+TYPES = (
+    "agenda",
+    "weather",
+    "games",
+    "snow",
+    "markets",
+    "photo",
+    "tasks",
+    "feeds",
+    "links",
+)
 # Widgets with a "show on the desk display" setting. A feeds widget supplies the display's
 # news tile; the others can be switched off there. The rest of the display is not optional.
 DESK_TYPES = ("agenda", "games", "snow", "feeds")

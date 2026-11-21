@@ -12,7 +12,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "server"))
-from app import agenda, astro, news, night, snow, stocks, weather  # noqa: E402
+from app import agenda, astro, gtasks, news, night, snow, stocks, weather  # noqa: E402
 from PIL import Image, ImageDraw  # noqa: E402
 
 OUT = Path(__file__).resolve().parents[1] / "fixtures"
@@ -24,7 +24,13 @@ def at(hour, minute=0, day=16):
 
 
 def event(title, start, end, location="", drive=None):
-    item = {"title": title, "start": start.timestamp(), "end": end.timestamp(), "all_day": False, "location": location}
+    item = {
+        "title": title,
+        "start": start.timestamp(),
+        "end": end.timestamp(),
+        "all_day": False,
+        "location": location,
+    }
     if drive:
         item["drive_minutes"] = drive
     return item
@@ -47,24 +53,58 @@ forecast = {
     "units": "F",
     "current": {"temp": 48.2, "code": 3, "is_day": True},
     "hourly": [
-        {"time": (base + timedelta(hours=h)).timestamp(), "temp": temps.get(h, 44), "code": codes.get(h, 3), "precip": 20, "is_day": 7 <= h <= 16}
+        {
+            "time": (base + timedelta(hours=h)).timestamp(),
+            "temp": temps.get(h, 44),
+            "code": codes.get(h, 3),
+            "precip": 20,
+            "is_day": 7 <= h <= 16,
+        }
         for h in range(48)
     ],
-    "daily": [{"high": 52, "low": 39, "sunrise": at(7, 38).timestamp(), "sunset": at(17, 18).timestamp()}],
+    "daily": [
+        {
+            "high": 52,
+            "low": 39,
+            "sunrise": at(7, 38).timestamp(),
+            "sunset": at(17, 18).timestamp(),
+        }
+    ],
 }
 headlines = [
-    ("Example News", 12, "City council approves new transit plan after months of debate"),
+    (
+        "Example News",
+        12,
+        "City council approves new transit plan after months of debate",
+    ),
     ("Example Tech", 40, "Chip maker announces new low-power radio for small devices"),
-    ("Example Weather", 65, "Storm system expected to arrive midweek, bringing the season’s first snow"),
+    (
+        "Example Weather",
+        65,
+        "Storm system expected to arrive midweek, bringing the season’s first snow",
+    ),
     ("Example Sports", 130, "Local team wins in overtime"),
 ]
-feed = [{"title": t, "source": s, "published": now.timestamp() - m * 60, "summary": ""} for s, m, t in headlines]
+feed = [
+    {"title": t, "source": s, "published": now.timestamp() - m * 60, "summary": ""}
+    for s, m, t in headlines
+]
+
+
 def mountain(name, recent_per_hour, coming_per_hour):
     return {
         "name": name,
         "unit": '"',
         "hours": [
-            {"time": (now + timedelta(hours=h)).timestamp(), "snow": recent_per_hour if -8 < h <= 0 else coming_per_hour if 0 < h <= 8 else 0, "temp": 24}
+            {
+                "time": (now + timedelta(hours=h)).timestamp(),
+                "snow": (
+                    recent_per_hour
+                    if -8 < h <= 0
+                    else coming_per_hour if 0 < h <= 8 else 0
+                ),
+                "temp": 24,
+            }
             for h in range(-48, 48)
         ],
     }
@@ -72,18 +112,46 @@ def mountain(name, recent_per_hour, coming_per_hour):
 
 # Three games in the three states a card can be in.
 games = [
-    {"state": "in", "line1": "SDSU @ BOIS", "line2": "17–24 · 3rd 8:42", "tv": "USA Net", "colors": ["#0033a0", "#d64309"]},
-    {"state": "pre", "line1": "IU @ WASH", "line2": "Sat 1:30 pm", "tv": "Peacock", "colors": ["#33006f", "#e8d3a2"]},
-    {"state": "post", "line1": "SEA @ LV", "line2": "21–13 · Final", "tv": "CBS", "colors": ["#002a5c", "#69be28"]},
+    {
+        "state": "in",
+        "line1": "SDSU @ BOIS",
+        "line2": "17–24 · 3rd 8:42",
+        "tv": "USA Net",
+        "colors": ["#0033a0", "#d64309"],
+    },
+    {
+        "state": "pre",
+        "line1": "IU @ WASH",
+        "line2": "Sat 1:30 pm",
+        "tv": "Peacock",
+        "colors": ["#33006f", "#e8d3a2"],
+    },
+    {
+        "state": "post",
+        "line1": "SEA @ LV",
+        "line2": "21–13 · Final",
+        "tv": "CBS",
+        "colors": ["#002a5c", "#69be28"],
+    },
 ]
 # Made-up quotes with different shapes of day; the session is open at the sample time.
 import math  # noqa: E402
 
 
 def quote(symbol, name, previous, drift, wobble):
-    closes = [previous * (1 + drift * i / 78 + wobble * math.sin(i / 6.0 + len(name))) for i in range(40)]
-    return {"symbol": symbol, "name": name, "price": closes[-1], "previous": previous, "closes": closes,
-            "session_start": at(7, 30).timestamp(), "session_end": at(14).timestamp()}
+    closes = [
+        previous * (1 + drift * i / 78 + wobble * math.sin(i / 6.0 + len(name)))
+        for i in range(40)
+    ]
+    return {
+        "symbol": symbol,
+        "name": name,
+        "price": closes[-1],
+        "previous": previous,
+        "closes": closes,
+        "session_start": at(7, 30).timestamp(),
+        "session_end": at(14).timestamp(),
+    }
 
 
 watch = stocks.Watchlist([])
@@ -96,23 +164,84 @@ watch.quotes = [
     quote("EX3", "Demo Holdings", 1204.50, 0.0002, 0.002),
 ]
 
+
+def todo(n, title, due="", parent=""):
+    return {
+        "id": str(n),
+        "title": title,
+        "notes": "",
+        "due": due,
+        "parent": parent,
+        "position": f"{n:04d}",
+        "link": "",
+    }
+
+
+task_lists = [
+    {
+        "title": "My Tasks",
+        "tasks": [
+            todo(1, "Renew the car registration", "2026-11-13"),
+            todo(2, "Send the quarterly numbers to finance", "2026-11-16"),
+            todo(3, "Book flights for the December trip", "2026-11-17"),
+            todo(4, "Plan the team offsite", "2026-11-20"),
+            todo(5, "Reserve the room", parent="4"),
+            todo(6, "Send the agenda", "2026-11-19", parent="4"),
+            todo(
+                7,
+                "Call the dentist about the follow-up appointment that keeps getting moved",
+            ),
+            todo(8, "Order a new desk lamp"),
+        ],
+    },
+    {
+        "title": "House",
+        "tasks": [
+            todo(1, "Blow out the sprinklers", "2026-11-15"),
+            todo(2, "Replace the furnace filter", "2026-11-22"),
+            todo(3, "Hang the garage shelves"),
+            todo(4, "Get quotes for the fence", "2026-12-04"),
+        ],
+    },
+    {
+        "title": "Someday",
+        "tasks": [
+            todo(1, "Learn to wax skis"),
+            todo(2, "Scan the old family photos"),
+            todo(3, "Build a second desk display"),
+        ],
+    },
+]
 view = weather.view(forecast, now, 2, 5)
 view["air"] = weather.air_view({"aqi": 42})
 doc = {
-    "time": {"epoch": int(now.timestamp()), "iso": now.isoformat(timespec="seconds"), "timezone": "America/Boise", "utc_offset_seconds": int(now.utcoffset().total_seconds())},
-    "agenda": agenda.build(events, now, 10, travel={"buffer_minutes": 5, "padding_percent": 15}),
+    "time": {
+        "epoch": int(now.timestamp()),
+        "iso": now.isoformat(timespec="seconds"),
+        "timezone": "America/Boise",
+        "utc_offset_seconds": int(now.utcoffset().total_seconds()),
+    },
+    "agenda": agenda.build(
+        events, now, 10, travel={"buffer_minutes": 5, "padding_percent": 15}
+    ),
     "weather": view,
     "moon": astro.moon(now),
     "news": news.view(feed, now.timestamp()),
     "games": games,
-    "snow": snow.reports([mountain("Bogus Basin", 0.5, 0.25), mountain("Brundage", 0.75, 0)], now.timestamp()),
+    "snow": snow.reports(
+        [mountain("Bogus Basin", 0.5, 0.25), mountain("Brundage", 0.75, 0)],
+        now.timestamp(),
+    ),
     "stocks": stocks.view(watch, now.timestamp()),
+    "tasks": gtasks.view(task_lists, now.date(), 40, full=False),
     "display": {"clock": "sun"},
     "night": night.active(now, {"enabled": True, "start": "22:30", "end": "06:30"}),
     "photos": {"count": 1},
 }
 OUT.mkdir(exist_ok=True)
-(OUT / "dashboard.json").write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n")
+(OUT / "dashboard.json").write_text(
+    json.dumps(doc, indent=2, ensure_ascii=False) + "\n"
+)
 
 # A stand-in photo: a flat sunset over a lake, plus pure colour swatches to check the decoder.
 W, H = 1024, 600
@@ -120,12 +249,30 @@ image = Image.new("RGB", (W, H), (250, 199, 117))
 draw = ImageDraw.Draw(image)
 draw.rectangle([0, 0, W, 240], fill=(240, 153, 123))
 draw.ellipse([670, 230, 810, 370], fill=(250, 238, 218))
-draw.polygon([(0, 380), (184, 220), (348, 360), (532, 180), (737, 370), (880, 260), (W, 360), (W, H), (0, H)], fill=(60, 52, 137))
-draw.polygon([(0, 440), (245, 320), (491, 430), (696, 340), (W, 450), (W, H), (0, H)], fill=(38, 33, 92))
+draw.polygon(
+    [
+        (0, 380),
+        (184, 220),
+        (348, 360),
+        (532, 180),
+        (737, 370),
+        (880, 260),
+        (W, 360),
+        (W, H),
+        (0, H),
+    ],
+    fill=(60, 52, 137),
+)
+draw.polygon(
+    [(0, 440), (245, 320), (491, 430), (696, 340), (W, 450), (W, H), (0, H)],
+    fill=(38, 33, 92),
+)
 draw.rectangle([0, 470, W, H], fill=(12, 68, 124))
 draw.rectangle([676, 480, 800, 486], fill=(250, 199, 117))
 draw.rectangle([696, 504, 780, 510], fill=(250, 199, 117))
 for i, colour in enumerate([(255, 0, 0), (0, 255, 0), (0, 0, 255)]):
     draw.rectangle([20 + i * 44, 20, 56 + i * 44, 56], fill=colour)
-image.save(OUT / "photo.jpg", "JPEG", quality=88, progressive=False, subsampling="4:2:0")
+image.save(
+    OUT / "photo.jpg", "JPEG", quality=88, progressive=False, subsampling="4:2:0"
+)
 print("wrote", OUT / "dashboard.json", "and photo.jpg")

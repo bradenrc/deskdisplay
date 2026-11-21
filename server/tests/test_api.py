@@ -326,3 +326,174 @@ def test_widget_settings_drive_the_desk_display(setup):
     assert saved["widgets"]["agenda"]["desk"] and saved["widgets"]["news"]["desk"]
     assert not saved["widgets"]["misc"]["desk"]
     assert "desk" not in saved["widgets"]["links"]
+
+
+# ---- Google Tasks ---------------------------------------------------------------------
+
+
+class FakeReply:
+    def __init__(self, body, status=200):
+        self.status_code, self._body = status, body
+
+    def json(self):
+        return self._body
+
+    def raise_for_status(self):
+        assert self.status_code == 200
+
+
+CLIENT = {
+    "client_id": "123-abc.apps.googleusercontent.com",
+    "client_secret": "GOCSPX-not-a-real-secret",
+}
+
+
+def test_tasks_sign_in_and_dashboard(setup, monkeypatch):
+    from urllib.parse import parse_qs, urlparse
+
+    from app import gtasks
+
+    app, client, tmp = setup
+    core = app.state.core
+    assert client.get("/api/dashboard").json()["tasks"] is None
+    assert "Google Tasks" in client.get("/setup").text
+
+    bad = client.post("/tasks/client", data={"client_id": "nope", "client_secret": "x"})
+    assert "err=" in bad.headers["location"]
+    client.post("/tasks/client", data=CLIENT)
+    page = client.get("/setup").text
+    assert CLIENT["client_secret"] not in page  # the secret is never shown again
+
+    sent = {}
+
+    def post(url, data=None, timeout=None):
+        sent[url] = data
+        if data.get("grant_type") == "authorization_code":
+            return FakeReply(
+                {"refresh_token": "r-1", "access_token": "a-1", "expires_in": 3600}
+            )
+        return FakeReply({"access_token": "a-2", "expires_in": 3600})
+
+    def get(url, params=None, headers=None, timeout=None):
+        assert headers["Authorization"] == "Bearer a-1"
+        if url.endswith("/users/@me/lists"):
+            return FakeReply(
+                {
+                    "items": [
+                        {"id": "L1", "title": "My Tasks"},
+                        {"id": "L2", "title": "Empty"},
+                    ]
+                }
+            )
+        if "/lists/L1/" in url:
+            assert params["showCompleted"] == "false"
+            return FakeReply(
+                {
+                    "items": [
+                        {
+                            "id": "b",
+                            "title": "Second",
+                            "position": "0002",
+                            "due": "2026-11-21T00:00:00.000Z",
+                        },
+                        {
+                            "id": "a",
+                            "title": "First",
+                            "position": "0001",
+                            "webViewLink": "https://tasks.google.com/task/a",
+                        },
+                        {
+                            "id": "c",
+                            "title": "Child",
+                            "position": "0001",
+                            "parent": "b",
+                        },
+                        {"id": "d", "title": "  ", "position": "0003"},
+                    ]
+                }
+            )
+        return FakeReply({})
+
+    monkeypatch.setattr(gtasks.requests, "post", post)
+    monkeypatch.setattr(gtasks.requests, "get", get)
+
+    go = client.post("/tasks/connect").headers["location"]
+    query = parse_qs(urlparse(go).query)
+    assert query["scope"] == [gtasks.SCOPE] and "readonly" in gtasks.SCOPE
+    assert query["redirect_uri"] == ["http://127.0.0.1/google/callback"]
+
+    wrong = client.get("/google/callback?state=forged&code=x")
+    assert "err=" in wrong.headers["location"] and not core.tasks.connected()
+    done = client.get(f"/google/callback?state={query['state'][0]}&code=the-code")
+    assert "msg=" in done.headers["location"] and core.tasks.connected()
+    assert sent[gtasks.TOKEN_URL]["code_verifier"]
+    assert (tmp / "data" / "google_tasks.json").stat().st_mode & 0o077 == 0
+
+    core.runner.run_once("tasks", core.job_tasks)
+    device = client.get("/api/dashboard").json()["tasks"]
+    assert device["total"] == 3 and device["more"] == 0
+    assert [(i["title"], i["indent"]) for i in device["lists"][0]["items"]] == [
+        ("First", 0),
+        ("Second", 1 - 1),
+        ("Child", 1),
+    ]
+    assert len(device["lists"]) == 1 and "link" not in device["lists"][0]["items"][0]
+    web = client.get("/api/dashboard?view=web").json()["tasks"]
+    assert web["lists"][0]["items"][0]["link"] == "https://tasks.google.com/task/a"
+
+    client.post("/tasks/disconnect")
+    assert not core.tasks.connected() and core.tasks.configured()
+    core.runner.run_once("tasks", core.job_tasks)
+    assert client.get("/api/dashboard").json()["tasks"] is None
+    client.post("/tasks/forget")
+    assert not (tmp / "data" / "google_tasks.json").exists()
+
+
+def test_tasks_sign_in_ended_by_google(setup, monkeypatch):
+    from app import gtasks
+
+    app, _, _ = setup
+    core = app.state.core
+    core.tasks.save_client(**CLIENT)
+    core.tasks._data["refresh_token"] = "old"
+    core.store.set("tasks", [])
+    monkeypatch.setattr(
+        gtasks.requests,
+        "post",
+        lambda *a, **k: FakeReply({"error": "invalid_grant"}, 400),
+    )
+    core.runner.run_once("tasks", core.job_tasks)
+    assert not core.tasks.connected()
+    assert core.store.meta()["tasks"]["state"] == "error"
+    assert "Sign in again" in core.store.meta()["tasks"]["detail"]
+    assert core.dashboard()["tasks"] is None
+
+
+def test_tasks_pasted_address(setup, monkeypatch):
+    from urllib.parse import parse_qs, urlparse
+
+    from app import gtasks
+
+    app, client, _ = setup
+    core = app.state.core
+    core.tasks.save_client(**CLIENT)
+    monkeypatch.setattr(
+        gtasks.requests,
+        "post",
+        lambda *a, **k: FakeReply({"refresh_token": "r", "access_token": "a"}),
+    )
+    monkeypatch.setattr(gtasks.requests, "get", lambda *a, **k: FakeReply({}))
+    state = parse_qs(urlparse(client.post("/tasks/connect").headers["location"]).query)[
+        "state"
+    ][0]
+    assert (
+        "err="
+        in client.post("/tasks/paste", data={"url": "http://127.0.0.1/"}).headers[
+            "location"
+        ]
+    )
+    pasted = f"http://127.0.0.1:8080/google/callback?state={state}&code=abc&scope=x"
+    assert (
+        "msg=" in client.post("/tasks/paste", data={"url": pasted}).headers["location"]
+    )
+    assert core.tasks.connected()

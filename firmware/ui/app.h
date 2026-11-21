@@ -8,7 +8,7 @@
 
 namespace app {
 void init();
-enum Page { PAGE_DASHBOARD, PAGE_MARKETS, PAGE_PHOTO, PAGE_AQUARIUM, PAGE_COUNT };
+enum Page { PAGE_DASHBOARD, PAGE_TASKS, PAGE_MARKETS, PAGE_PHOTO, PAGE_AQUARIUM, PAGE_COUNT };
 void show_page(int index);  // a Page; swiping left and right moves between them
 int active_page();
 bool local_time(struct tm& out);            // false until the first reply from the server
@@ -23,6 +23,12 @@ void set_status(const char* text);  // shown in place of the date until data arr
 void tick();                        // once a second
 void next_headline();
 }  // namespace dashboard
+
+namespace tasks {
+void build(lv_obj_t* tile);
+void update(const Model& model);
+void tick(bool active);  // once a second
+}  // namespace tasks
 
 namespace markets {
 void build(lv_obj_t* tile);

@@ -49,6 +49,8 @@ DEFAULTS: dict[str, Any] = {
         "refresh_minutes": 15,
         "max_items": 150,
     },
+    # Google Tasks, connected on the setup page. display_max is how many the desk display is sent.
+    "tasks": {"refresh_minutes": 5, "display_max": 40},
     "photos": {
         "drive_folder_id": "",
         "local_dir": "",

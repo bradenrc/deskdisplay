@@ -66,6 +66,23 @@ small rotating pool on disk:
 A local folder can be used as well or instead: mount it in `docker-compose.yml` and set
 `photos.local_dir`. Local folders are shown in full.
 
+## 4. Google Tasks: your own small Google app
+
+Open tasks get their own screen on the display (swipe once from the dashboard) and a Tasks
+widget on the start page. Google offers no secret link for tasks, so this is a sign-in, and
+Google requires app credentials of your own for it. Step 4 on the setup page walks through
+it: create a project at console.cloud.google.com, enable the **Google Tasks API**, set up the
+consent screen as **External** and **publish** it (left on "Testing", Google ends the sign-in
+every seven days), then create a **Desktop app** client and paste its ID and secret.
+
+- Access is **read-only**: the server cannot change or complete a task.
+- The client ID, secret and token are kept in `data/google_tasks.json`, readable only by the
+  server's user. Keep that file out of backups you share.
+- As with Drive, the sign-in finishes by itself when the browser is on the server's own
+  machine. From another machine the Google tab ends on "This site can't be reached" at
+  `http://127.0.0.1:8080/google/callback?...`; paste that address into the box on the setup page.
+- `tasks.refresh_minutes` (default 5) and `tasks.display_max` (default 40) are in `config.yaml`.
+
 ## Extras
 
 All of these are configured in `config/config.yaml`; the example file documents each one.
@@ -141,7 +158,7 @@ uv venv .venv && uv pip install --python .venv/bin/python -r requirements.txt py
 ## The start page
 
 `http://<server>:8080/` is a personal start page for a browser: a search box, the desk
-screen's panels (agenda, weather, games, snow, markets, photo), and two kinds of widget of
+screen's panels (agenda, tasks, weather, games, snow, markets, photo), and two kinds of widget of
 your own:
 
 - **News feeds**: tabs of RSS feeds. Paste a site or feed address and the server finds the feed.

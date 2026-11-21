@@ -586,6 +586,117 @@
       }
     ]
   },
+  "tasks": {
+    "lists": [
+      {
+        "title": "My Tasks",
+        "items": [
+          {
+            "title": "Renew the car registration",
+            "due": "Nov 13",
+            "tone": "late",
+            "indent": 0
+          },
+          {
+            "title": "Send the quarterly numbers to finance",
+            "due": "Today",
+            "tone": "today",
+            "indent": 0
+          },
+          {
+            "title": "Book flights for the December trip",
+            "due": "Tomorrow",
+            "tone": "soon",
+            "indent": 0
+          },
+          {
+            "title": "Plan the team offsite",
+            "due": "Friday",
+            "tone": "",
+            "indent": 0
+          },
+          {
+            "title": "Reserve the room",
+            "due": "",
+            "tone": "",
+            "indent": 1
+          },
+          {
+            "title": "Send the agenda",
+            "due": "Thursday",
+            "tone": "",
+            "indent": 1
+          },
+          {
+            "title": "Call the dentist about the follow-up appointment that keeps getting moved",
+            "due": "",
+            "tone": "",
+            "indent": 0
+          },
+          {
+            "title": "Order a new desk lamp",
+            "due": "",
+            "tone": "",
+            "indent": 0
+          }
+        ]
+      },
+      {
+        "title": "House",
+        "items": [
+          {
+            "title": "Blow out the sprinklers",
+            "due": "Yesterday",
+            "tone": "late",
+            "indent": 0
+          },
+          {
+            "title": "Replace the furnace filter",
+            "due": "Sunday",
+            "tone": "",
+            "indent": 0
+          },
+          {
+            "title": "Hang the garage shelves",
+            "due": "",
+            "tone": "",
+            "indent": 0
+          },
+          {
+            "title": "Get quotes for the fence",
+            "due": "Dec 4",
+            "tone": "",
+            "indent": 0
+          }
+        ]
+      },
+      {
+        "title": "Someday",
+        "items": [
+          {
+            "title": "Learn to wax skis",
+            "due": "",
+            "tone": "",
+            "indent": 0
+          },
+          {
+            "title": "Scan the old family photos",
+            "due": "",
+            "tone": "",
+            "indent": 0
+          },
+          {
+            "title": "Build a second desk display",
+            "due": "",
+            "tone": "",
+            "indent": 0
+          }
+        ]
+      }
+    ],
+    "total": 15,
+    "more": 0
+  },
   "display": {
     "clock": "sun"
   },
