@@ -1,4 +1,4 @@
 build/
 .deps/
 .pio/
-src/secrets.h
+esp32/src/secrets.h

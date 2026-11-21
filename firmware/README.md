@@ -61,7 +61,11 @@ millisecond clock, and a large-buffer allocator. The simulator's versions are in
 
 - **Dashboard** (`ui/dashboard.cpp`) polls `/api/dashboard` every 30 seconds. The clock is
   set from the server's reply, so the device needs no timezone settings of its own.
+- **Tasks** (`ui/tasks.cpp`) lists open Google Tasks from the same server reply, soonest due
+  first, and scrolls when the list is long.
 - **Markets** (`ui/markets.cpp`) draws a card per symbol from the same server reply.
+- **Changing screens by itself** (`ui/app.cpp`): the screens to move through and the time on
+  each come from the server, set on the start page. A touch holds the current screen.
 - **Photo frame** (`ui/photo.cpp`) fetches `/api/photo/next` at the panel size every 30
   seconds while it is the visible page, and decodes the JPEG into one full-screen buffer.
 - **Aquarium** (`ui/aquarium.cpp`) hosts the ASCII-art tank from
@@ -82,7 +86,8 @@ millisecond clock, and a large-buffer allocator. The simulator's versions are in
 `tank/board_7b.h`, which was written for this exact board; `esp32/src/main.cpp` adds Wi-Fi,
 HTTP and the glue to the interface.
 
-**Status: it compiles (about 2 MB), but has not been run on the board yet.**
+**Status: it compiles (about 2 MB, last built with the Tasks screen and screen changing), but
+has not been run on the board yet.**
 
 ```bash
 cp esp32/src/secrets.example.h esp32/src/secrets.h   # then set Wi-Fi name, password, server address
