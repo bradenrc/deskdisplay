@@ -48,50 +48,15 @@ POLL = (
 )
 
 
-TASKS_POLL = POLL.replace("drive_connected", "tasks_connected").replace(
-    "Google Drive connected.", "Google Tasks connected."
-)
-
-
-def _tasks_section(core, connected: bool) -> str:
+def _tasks_section(core) -> str:
     account = core.tasks
+    names = account.accounts()
+    signing_in = account.signing_in()
+    pill = f"{len(names)} accounts connected" if len(names) > 1 else "Connected"
     parts = [
-        f"<section><h2>4. Google Tasks {_pill(connected, 'Connected', 'Not connected')}</h2>"
+        f"<section><h2>4. Google Tasks {_pill(bool(names), pill, 'Not connected')}</h2>"
     ]
-    if connected:
-        parts.append(
-            "<p>Read-only access to your task lists, shown on the display's Tasks screen and in "
-            "the Tasks widget on the start page. This server cannot change or complete a task. "
-            "You can revoke it any time at <a href='https://myaccount.google.com/permissions' "
-            "target=_blank rel=noopener>myaccount.google.com/permissions</a>.</p>"
-            "<form class=inline method=post action='/tasks/disconnect'><button>Disconnect</button></form>"
-        )
-    elif account.configured():
-        if account.signing_in():
-            parts.append(
-                "<div class='note warn'>Waiting for you to finish signing in on the Google tab. "
-                "This page updates by itself when it is done.</div>"
-                "<p><b>If the Google tab ended on &ldquo;This site can&rsquo;t be reached&rdquo;</b> "
-                "at an address starting with <code>http://127.0.0.1</code>, that is expected when "
-                "this server is another machine. Copy that whole address from the address bar and "
-                "paste it here:</p>"
-                "<form method=post action='/tasks/paste'><input type=text name=url required "
-                "placeholder='http://127.0.0.1:8080/google/callback?state=...&code=...'>"
-                "<button class=primary>Finish sign-in</button></form>" + TASKS_POLL
-            )
-        else:
-            parts.append(
-                "<p>Sign-in opens in a new tab on Google's own page. The access is read-only. "
-                "Google will warn that it &ldquo;hasn&rsquo;t verified this app&rdquo; because the "
-                "app is your own: choose <b>Advanced</b>, then <b>Go to</b> your app's name.</p>"
-            )
-        parts.append(
-            "<form class=inline method=post action='/tasks/connect' target=_blank "
-            "onsubmit=\"setTimeout(()=>location.replace('/setup'),1500)\">"
-            f"<button class='{'' if account.signing_in() else 'primary'}'>"
-            f"{'Start sign-in again' if account.signing_in() else 'Sign in with Google'}</button></form>"
-        )
-    else:
+    if not account.configured():
         parts.append(
             "<p>Google has no secret link for tasks the way it does for a calendar, so this "
             "needs a sign-in, and Google requires a small free &ldquo;app&rdquo; of your own for "
@@ -102,29 +67,82 @@ def _tasks_section(core, connected: bool) -> str:
             "choose <b>Enable</b>.</li>"
             "<li>Under <b>Google Auth Platform</b>, choose <b>Get started</b>: any app name, your "
             "own email, audience <b>External</b>.</li>"
-            "<li>Under <b>Audience</b>, choose <b>Publish app</b> so the status reads "
-            "<b>In production</b>. Left on &ldquo;Testing&rdquo;, Google ends the sign-in every "
-            "seven days.</li>"
+            "<li>Under <b>Audience</b>, add each Google account you will sign in with as a "
+            "<b>test user</b>. While the app is on &ldquo;Testing&rdquo; Google ends each sign-in "
+            "after seven days; <b>Publish app</b> lifts that, once the Branding page is filled in.</li>"
             "<li>Under <b>Clients</b>, choose <b>Create client</b>, type <b>Desktop app</b>, and "
             "copy the client ID and client secret into the boxes below.</li></ol>"
-        )
-    if account.configured():
-        parts.append(
-            "<form class=inline method=post action='/tasks/forget'>"
-            "<button>Remove the app credentials</button></form>"
-            f"<p class=muted>Using client ID <code>{escape(account.client_id()[:16])}&hellip;</code></p>"
-        )
-    else:
-        parts.append(
             "<form method=post action='/tasks/client' autocomplete=off>"
             "<input type=text name=client_id required placeholder='Client ID (ends with "
             ".apps.googleusercontent.com)'>"
             "<p style='margin:8px 0 0'><input type=password name=client_secret required "
             "placeholder='Client secret' style='width:100%;padding:9px 10px;border:1px solid "
             "var(--line);border-radius:8px;background:var(--bg);color:var(--text)'></p>"
-            "<button class=primary>Save</button></form>"
+            "<button class=primary>Save</button></form></section>"
         )
-    parts.append("</section>")
+        return "".join(parts)
+
+    if names:
+        parts.append(
+            "<p>Read-only access to your task lists, shown on the display's Tasks screen and in "
+            "the Tasks widget on the start page. This server cannot change or complete a task. "
+            "You can revoke it any time at <a href='https://myaccount.google.com/permissions' "
+            "target=_blank rel=noopener>myaccount.google.com/permissions</a>.</p><table>"
+        )
+        for name in names:
+            parts.append(
+                f"<tr><td><b>{escape(name)}</b></td><td style='text-align:right'>"
+                "<form class=inline method=post action='/tasks/disconnect'>"
+                f"<input type=hidden name=name value='{escape(name, quote=True)}'>"
+                "<button style='margin:0'>Disconnect</button></form></td></tr>"
+            )
+        parts.append("</table>")
+    if signing_in:
+        poll = (
+            "<script>setInterval(async()=>{try{const r=await fetch('/api/status');"
+            f"if((await r.json()).tasks_accounts!=={len(names)})location.replace('/setup?msg='+"
+            "encodeURIComponent('Google Tasks connected.'))}catch(e){}},3000)</script>"
+        )
+        parts.append(
+            "<div class='note warn'>Waiting for you to finish signing in on the Google tab. "
+            "This page updates by itself when it is done.</div>"
+            "<p><b>If the Google tab ended on &ldquo;This site can&rsquo;t be reached&rdquo;</b> "
+            "at an address starting with <code>http://127.0.0.1</code>, that is expected when "
+            "this server is another machine. Copy that whole address from the address bar and "
+            "paste it here:</p>"
+            "<form method=post action='/tasks/paste'><input type=text name=url required "
+            "placeholder='http://127.0.0.1:8080/google/callback?state=...&code=...'>"
+            "<button class=primary>Finish sign-in</button></form>" + poll
+        )
+    if names:
+        parts.append(
+            "<p><b>Add another account</b>, for example a work one. Give it a short name; with "
+            "more than one account, the name is shown above that account's tasks. Signing in "
+            "under a name already listed replaces that account.</p>"
+        )
+    else:
+        parts.append(
+            "<p>Sign-in opens in a new tab on Google's own page. The access is read-only. "
+            "Google will warn that it &ldquo;hasn&rsquo;t verified this app&rdquo; because the "
+            "app is your own: choose <b>Advanced</b>, then <b>Go to</b> your app's name.</p>"
+        )
+    if len(names) < gtasks.MAX_ACCOUNTS:
+        parts.append(
+            "<form method=post action='/tasks/connect' target=_blank "
+            "onsubmit=\"setTimeout(()=>location.replace('/setup'),1500)\">"
+            "<input type=text name=name maxlength=24 required style='max-width:260px' "
+            f"value='{'' if names else 'Home'}' placeholder='Name, e.g. Work'> "
+            f"<button class='{'' if signing_in or names else 'primary'}'>"
+            "Sign in with Google</button></form>"
+        )
+    parts.append(
+        "<p class=muted>A work account only connects if it is added as a test user of your "
+        "Google app (or the app is published), and if its administrator allows outside apps.</p>"
+        "<form class=inline method=post action='/tasks/forget'>"
+        "<button>Remove everything, including the app credentials</button></form>"
+        f"<p class=muted>Using client ID <code>{escape(account.client_id()[:16])}&hellip;</code></p>"
+        "</section>"
+    )
     return "".join(parts)
 
 
@@ -243,7 +261,7 @@ def render(core, msg: str = "", err: str = "") -> str:
         "<button class=primary>Save folder</button></form></section>"
     )
 
-    parts.append(_tasks_section(core, status["tasks_connected"]))
+    parts.append(_tasks_section(core))
 
     # Status
     parts.append("<section><h2>Status</h2><table>")
@@ -389,14 +407,16 @@ def register(app: FastAPI, core) -> None:
         return _back(msg="Saved. Now sign in with Google.")
 
     @app.post("/tasks/connect", include_in_schema=False)
-    def tasks_connect(request: Request) -> RedirectResponse:
+    def tasks_connect(
+        request: Request, name: str = Form(default="")
+    ) -> RedirectResponse:
         _same_site(request)
         # Google only allows a plain-http return address on the loopback address. That reaches
         # this server when the browser is on the same machine; otherwise the address is pasted.
         port = request.url.port
         redirect = f"http://127.0.0.1{f':{port}' if port else ''}{gtasks.CALLBACK_PATH}"
         try:
-            return RedirectResponse(core.tasks.start(redirect), status_code=303)
+            return RedirectResponse(core.tasks.start(redirect, name), status_code=303)
         except gtasks.TasksError as exc:
             return _back(err=str(exc))
 
@@ -410,11 +430,13 @@ def register(app: FastAPI, core) -> None:
         return _tasks_done(lambda: core.tasks.finish_from_pasted(url))
 
     @app.post("/tasks/disconnect", include_in_schema=False)
-    def tasks_disconnect(request: Request) -> RedirectResponse:
+    def tasks_disconnect(
+        request: Request, name: str = Form(default="")
+    ) -> RedirectResponse:
         _same_site(request)
-        core.tasks.disconnect()
+        core.tasks.disconnect(name or None)
         core.runner.trigger("tasks")
-        return _back(msg="Google Tasks disconnected.")
+        return _back(msg=f"{name or 'Google Tasks'} disconnected.")
 
     @app.post("/tasks/forget", include_in_schema=False)
     def tasks_forget(request: Request) -> RedirectResponse:

@@ -68,13 +68,19 @@ A local folder can be used as well or instead: mount it in `docker-compose.yml` 
 
 ## 4. Google Tasks: your own small Google app
 
-Open tasks get their own screen on the display (swipe once from the dashboard) and a Tasks
+Open tasks get their own screen on the display (swipe once from the dashboard; it scrolls
+when the list is long) and a Tasks
 widget on the start page. Google offers no secret link for tasks, so this is a sign-in, and
 Google requires app credentials of your own for it. Step 4 on the setup page walks through
 it: create a project at console.cloud.google.com, enable the **Google Tasks API**, set up the
 consent screen as **External** and **publish** it (left on "Testing", Google ends the sign-in
 every seven days), then create a **Desktop app** client and paste its ID and secret.
 
+- More than one Google account can be connected (say Home and Work), each under a short
+  name. With several, the name is shown above that account's tasks. Each account must be a
+  test user of your Google app unless the app is published, and a work account also needs its
+  administrator to allow outside apps.
+- Tasks are listed soonest due date first; tasks with no date follow in Google's own order.
 - Access is **read-only**: the server cannot change or complete a task.
 - The client ID, secret and token are kept in `data/google_tasks.json`, readable only by the
   server's user. Keep that file out of backups you share.

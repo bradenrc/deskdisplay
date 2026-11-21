@@ -616,14 +616,14 @@
             "indent": 0
           },
           {
-            "title": "Reserve the room",
-            "due": "",
+            "title": "Send the agenda",
+            "due": "Thursday",
             "tone": "",
             "indent": 1
           },
           {
-            "title": "Send the agenda",
-            "due": "Thursday",
+            "title": "Reserve the room",
+            "due": "",
             "tone": "",
             "indent": 1
           },
@@ -657,14 +657,14 @@
             "indent": 0
           },
           {
-            "title": "Hang the garage shelves",
-            "due": "",
+            "title": "Get quotes for the fence",
+            "due": "Dec 4",
             "tone": "",
             "indent": 0
           },
           {
-            "title": "Get quotes for the fence",
-            "due": "Dec 4",
+            "title": "Hang the garage shelves",
+            "due": "",
             "tone": "",
             "indent": 0
           }

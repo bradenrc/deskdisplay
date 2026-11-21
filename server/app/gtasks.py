@@ -31,6 +31,7 @@ API = "https://tasks.googleapis.com/tasks/v1"
 CALLBACK_PATH = "/google/callback"
 PENDING_SECONDS = 15 * 60
 MAX_PER_LIST = 300
+MAX_ACCOUNTS = 4
 
 
 class TasksError(Exception):
@@ -57,20 +58,34 @@ class Account:
         self._lock = threading.Lock()
         self._data: dict = {}
         self._pending: dict | None = None  # a sign-in that has been started
-        self._access: tuple[str, float] | None = None  # token, good until
+        self._access: dict[str, tuple[str, float]] = (
+            {}
+        )  # per account: token, good until
         if path.exists():
             try:
                 self._data = json.loads(path.read_text())
             except (OSError, ValueError):
                 self._data = {}
+        old = self._data.pop(
+            "refresh_token", None
+        )  # from when there was one account only
+        if old:
+            self._data["accounts"] = [{"name": "Home", "refresh_token": old}]
+            self._save()
 
     # ---- what is set up ----------------------------------------------------------
 
     def configured(self) -> bool:
         return bool(self._data.get("client_id") and self._data.get("client_secret"))
 
+    def accounts(self) -> list[str]:
+        """The names given to the signed-in Google accounts, such as Home and Work."""
+        if not self.configured():
+            return []
+        return [entry["name"] for entry in self._data.get("accounts", [])]
+
     def connected(self) -> bool:
-        return self.configured() and bool(self._data.get("refresh_token"))
+        return bool(self.accounts())
 
     def signing_in(self) -> bool:
         pending = self._pending
@@ -82,7 +97,7 @@ class Account:
     def _save(self) -> None:
         tmp = self.path.with_suffix(".tmp")
         tmp.write_text(json.dumps(self._data, indent=2))
-        os.chmod(tmp, 0o600)  # holds a secret and a token: owner only
+        os.chmod(tmp, 0o600)  # holds a secret and tokens: owner only
         tmp.replace(self.path)
 
     def save_client(self, client_id: str, client_secret: str) -> None:
@@ -95,34 +110,45 @@ class Account:
             raise TasksError("That does not look like a client secret.")
         with self._lock:
             self._data = {"client_id": client_id, "client_secret": client_secret}
-            self._access = self._pending = None
+            self._access, self._pending = {}, None
             self._save()
 
     def forget(self) -> None:
-        """Signs out and removes the app credentials too."""
+        """Signs every account out and removes the app credentials too."""
         self.disconnect()
         with self._lock:
             self._data = {}
             self.path.unlink(missing_ok=True)
 
-    def disconnect(self) -> None:
+    def disconnect(self, name: str | None = None) -> None:
+        """Signs one account out, or all of them."""
         with self._lock:
-            token = self._data.pop("refresh_token", None)
-            self._access = self._pending = None
-            if self._data:
+            entries = self._data.get("accounts", [])
+            gone = [e for e in entries if name is None or e["name"] == name]
+            self._data["accounts"] = [e for e in entries if e not in gone]
+            for entry in gone:
+                self._access.pop(entry["name"], None)
+            self._pending = None
+            if self.configured():
                 self._save()
-        if token:
+        for entry in gone:
             try:  # tell Google too, so the access is gone at their end
-                requests.post(REVOKE_URL, data={"token": token}, timeout=10)
+                requests.post(
+                    REVOKE_URL, data={"token": entry["refresh_token"]}, timeout=10
+                )
             except requests.RequestException:
                 pass
 
     # ---- sign-in -----------------------------------------------------------------
 
-    def start(self, redirect_uri: str) -> str:
-        """Returns the Google page to send the browser to."""
+    def start(self, redirect_uri: str, name: str = "") -> str:
+        """Returns the Google page to send the browser to. `name` is what to call the
+        account; signing in under a name already in use replaces that account."""
         if not self.configured():
             raise TasksError("Save the client ID and secret first.")
+        name = " ".join(name.split())[:24] or "Google"
+        if name not in self.accounts() and len(self.accounts()) >= MAX_ACCOUNTS:
+            raise TasksError(f"No more than {MAX_ACCOUNTS} accounts can be connected.")
         verifier = secrets.token_urlsafe(48)
         challenge = (
             base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest())
@@ -134,6 +160,7 @@ class Account:
             "state": state,
             "verifier": verifier,
             "redirect": redirect_uri,
+            "name": name,
             "at": time.time(),
         }
         return (
@@ -146,7 +173,9 @@ class Account:
                     "response_type": "code",
                     "scope": SCOPE,
                     "access_type": "offline",
-                    "prompt": "consent",  # so Google always hands back a long-lived token
+                    # consent: so Google always hands back a long-lived token.
+                    # select_account: so a second account can be chosen.
+                    "prompt": "consent select_account",
                     "state": state,
                     "code_challenge": challenge,
                     "code_challenge_method": "S256",
@@ -182,11 +211,15 @@ class Account:
         body = resp.json()
         if not body.get("refresh_token"):
             raise TasksError("Google did not return a long-lived token. Try again.")
+        name = pending["name"]
         with self._lock:
-            self._data["refresh_token"] = body["refresh_token"]
+            entries = [e for e in self._data.get("accounts", []) if e["name"] != name]
+            entries.append({"name": name, "refresh_token": body["refresh_token"]})
+            self._data["accounts"] = entries
             self._pending = None
+            self._access.pop(name, None)
             if body.get("access_token"):
-                self._access = (
+                self._access[name] = (
                     body["access_token"],
                     time.time() + int(body.get("expires_in", 3600)) - 60,
                 )
@@ -206,19 +239,24 @@ class Account:
 
     # ---- reading tasks -----------------------------------------------------------
 
-    def _token(self) -> str:
+    def _token(self, name: str) -> str:
         with self._lock:
-            if self._access and self._access[1] > time.time():
-                return self._access[0]
+            held = self._access.get(name)
+            if held and held[1] > time.time():
+                return held[0]
             data = dict(self._data)
-        if not data.get("refresh_token"):
-            raise TasksError("Google Tasks is not connected")
+        refresh = next(
+            (e["refresh_token"] for e in data.get("accounts", []) if e["name"] == name),
+            None,
+        )
+        if not refresh:
+            raise TasksError(f"{name} is not connected")
         resp = requests.post(
             TOKEN_URL,
             data={
                 "client_id": data["client_id"],
                 "client_secret": data["client_secret"],
-                "refresh_token": data["refresh_token"],
+                "refresh_token": refresh,
                 "grant_type": "refresh_token",
             },
             timeout=20,
@@ -226,29 +264,32 @@ class Account:
         if resp.status_code in (400, 401):
             # The access was revoked or has lapsed: only a new sign-in fixes it.
             with self._lock:
-                self._data.pop("refresh_token", None)
-                self._access = None
+                self._data["accounts"] = [
+                    e for e in self._data.get("accounts", []) if e["name"] != name
+                ]
+                self._access.pop(name, None)
                 self._save()
             raise TasksError(
-                f"Google ended the sign-in ({_problem(resp)}). Sign in again on the setup page."
+                f"Google ended the sign-in for {name} ({_problem(resp)}). "
+                "Sign in again on the setup page."
             )
         resp.raise_for_status()
         body = resp.json()
         with self._lock:
-            self._access = (
+            self._access[name] = (
                 body["access_token"],
                 time.time() + int(body.get("expires_in", 3600)) - 60,
             )
-            return self._access[0]
+            return self._access[name][0]
 
-    def _pages(self, url: str, params: dict, cap: int) -> list[dict]:
-        headers = {"Authorization": f"Bearer {self._token()}"}
+    def _pages(self, name: str, url: str, params: dict, cap: int) -> list[dict]:
+        headers = {"Authorization": f"Bearer {self._token(name)}"}
         items: list[dict] = []
         params = dict(params)
         while len(items) < cap:
             resp = requests.get(url, params=params, headers=headers, timeout=20)
             if resp.status_code != 200:
-                raise TasksError(f"Google Tasks: {_problem(resp)}")
+                raise TasksError(f"Google Tasks ({name}): {_problem(resp)}")
             body = resp.json()
             items.extend(body.get("items") or [])
             if not body.get("nextPageToken"):
@@ -256,11 +297,13 @@ class Account:
             params["pageToken"] = body["nextPageToken"]
         return items[:cap]
 
-    def fetch(self) -> list[dict]:
-        """Every list with its open tasks, as Google returns them (trimmed to what is used)."""
+    def _fetch_one(self, name: str) -> list[dict]:
         out = []
-        for entry in self._pages(f"{API}/users/@me/lists", {"maxResults": 100}, 100):
+        for entry in self._pages(
+            name, f"{API}/users/@me/lists", {"maxResults": 100}, 100
+        ):
             raw = self._pages(
+                name,
                 f"{API}/lists/{entry['id']}/tasks",
                 {"maxResults": 100, "showCompleted": "false", "showHidden": "false"},
                 MAX_PER_LIST,
@@ -279,9 +322,30 @@ class Account:
                 if (t.get("title") or "").strip() and t.get("status") != "completed"
             ]
             out.append(
-                {"title": (entry.get("title") or "Tasks").strip(), "tasks": tasks}
+                {
+                    "account": name,
+                    "title": (entry.get("title") or "Tasks").strip(),
+                    "tasks": tasks,
+                }
             )
         return out
+
+    def fetch(self, previous: list[dict] | None = None) -> tuple[list[dict], list[str]]:
+        """Every list with its open tasks, account by account, and what went wrong if anything.
+        An account that cannot be read right now keeps the lists it had in `previous`; one
+        whose sign-in Google has ended is left out."""
+        lists: list[dict] = []
+        problems: list[str] = []
+        for name in self.accounts():
+            try:
+                lists.extend(self._fetch_one(name))
+            except (TasksError, requests.RequestException) as exc:
+                problems.append(
+                    str(exc) if isinstance(exc, TasksError) else f"{name}: no reply"
+                )
+                if name in self.accounts():
+                    lists.extend(e for e in previous or [] if e.get("account") == name)
+        return lists, problems
 
 
 def due_label(due: str, today: date) -> tuple[str, str]:
@@ -306,16 +370,21 @@ def due_label(due: str, today: date) -> tuple[str, str]:
 
 
 def _ordered(tasks: list[dict]) -> list[tuple[dict, int]]:
-    """Google's own order, each task followed by its subtasks."""
+    """Soonest due date first, then tasks with no date in Google's own order. Subtasks stay
+    under their task, in the same order among themselves."""
+
+    def order(task: dict) -> tuple[str, str]:
+        return (task["due"] or "9999", task["position"])
+
     ids = {t["id"] for t in tasks}
     children: dict[str, list[dict]] = {}
     for task in tasks:
         parent = task["parent"] if task["parent"] in ids else ""
         children.setdefault(parent, []).append(task)
     rows: list[tuple[dict, int]] = []
-    for top in sorted(children.get("", []), key=lambda t: t["position"]):
+    for top in sorted(children.get("", []), key=order):
         rows.append((top, 0))
-        for sub in sorted(children.get(top["id"], []), key=lambda t: t["position"]):
+        for sub in sorted(children.get(top["id"], []), key=order):
             rows.append((sub, 1))
     return rows
 
@@ -325,7 +394,13 @@ def view(lists: list[dict] | None, today: date, limit: int, full: bool) -> dict 
     if lists is None:
         return None
     out, shown, total = [], 0, 0
+    lists = [entry for entry in lists if entry["tasks"]]
+    names = [entry.get("account", "") for entry in lists]
     for entry in lists:
+        title = entry["title"]
+        if len(set(names)) > 1:  # say whose list it is: "Work", or "Work · Errands"
+            account = entry.get("account", "")
+            title = account if names.count(account) == 1 else f"{account} · {title}"
         rows = _ordered(entry["tasks"])
         total += len(rows)
         items = []
@@ -344,5 +419,5 @@ def view(lists: list[dict] | None, today: date, limit: int, full: bool) -> dict 
             items.append(item)
         shown += len(items)
         if items:
-            out.append({"title": entry["title"][:60], "items": items})
+            out.append({"title": title[:60], "items": items})
     return {"lists": out, "total": total, "more": total - shown}

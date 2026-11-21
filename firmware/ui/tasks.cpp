@@ -1,17 +1,19 @@
-// Tasks page: open Google Tasks in two columns, grouped under the name of each list.
+// Tasks page: open Google Tasks as one full-width list, soonest due first, that scrolls.
 #include <cstdio>
 #include <cstring>
+#include <string>
 
 #include "app.h"
 #include "theme.h"
 
 namespace {
 
-constexpr int LEFT = 34, TOP = 92, GAP = 36, ROW_H = 40;
-constexpr int GRID_W = SCREEN_W - 2 * LEFT, GRID_H = SCREEN_H - TOP - 26;
-constexpr int COL_W = (GRID_W - GAP) / 2, ROWS = GRID_H / ROW_H, DUE_W = 112;
+constexpr int LEFT = 34, TOP = 92, ROW_H = 52, RING = 24, DUE_W = 150, BAR = 18;
+constexpr int GRID_W = SCREEN_W - 2 * LEFT, GRID_H = SCREEN_H - TOP - 20;
+constexpr int LIST_W = GRID_W - BAR;  // room on the right for the scrollbar
 
 lv_obj_t *grid, *count_lbl, *clock_lbl, *hint;
+std::string shown;  // what is on screen, so an unchanged list is left alone (and stays scrolled)
 
 void place(lv_obj_t* label, int x, int y, int w, const lv_font_t* font) {
     lv_obj_set_pos(label, x, y + (ROW_H - lv_font_get_line_height(font)) / 2);
@@ -19,26 +21,26 @@ void place(lv_obj_t* label, int x, int y, int w, const lv_font_t* font) {
     lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
 }
 
-void add_row(const TaskRow& row, int x, int y) {
+void add_row(const TaskRow& row, int y) {
     if (row.header) {
-        place(make_label(grid, &font_text_18, C_BLUE, row.title.c_str()), x, y + 4, COL_W, &font_text_18);
+        place(make_label(grid, &font_text_20, C_BLUE, row.title.c_str()), 0, y + 4, LIST_W, &font_text_20);
         return;
     }
-    int at = x + row.indent * 28;
+    int at = row.indent * 36;
     lv_obj_t* ring = make_box(grid);  // the empty circle of a task not yet done
-    lv_obj_set_size(ring, 20, 20);
-    lv_obj_set_pos(ring, at, y + (ROW_H - 20) / 2);
+    lv_obj_set_size(ring, RING, RING);
+    lv_obj_set_pos(ring, at, y + (ROW_H - RING) / 2);
     lv_obj_set_style_radius(ring, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_border_width(ring, 2, 0);
     lv_obj_set_style_border_color(ring, col(C_FAINT), 0);
 
     int due_w = row.due.empty() ? 0 : DUE_W;
-    lv_obj_t* title = make_label(grid, &font_text_20, C_TEXT, row.title.c_str());
-    place(title, at + 32, y, x + COL_W - (at + 32) - due_w, &font_text_20);
+    lv_obj_t* title = make_label(grid, &font_text_24, C_TEXT, row.title.c_str());
+    place(title, at + RING + 16, y, LIST_W - (at + RING + 16) - due_w, &font_text_24);
     if (due_w) {
         uint32_t tone = row.tone == "late" ? C_RED_TEXT : row.tone == "today" ? C_AMBER_TEXT : C_DIM;
-        lv_obj_t* due = make_label(grid, &font_text_18, tone, row.due.c_str());
-        place(due, x + COL_W - DUE_W + 8, y, DUE_W - 8, &font_text_18);
+        lv_obj_t* due = make_label(grid, &font_text_20, tone, row.due.c_str());
+        place(due, LIST_W - DUE_W + 8, y, DUE_W - 8, &font_text_20);
         lv_obj_set_style_text_align(due, LV_TEXT_ALIGN_RIGHT, 0);
     }
 }
@@ -54,15 +56,33 @@ void build(lv_obj_t* t) {
     clock_lbl = make_label(t, &font_clock_56, C_MUTED);
     lv_obj_align(clock_lbl, LV_ALIGN_TOP_RIGHT, -LEFT, 18);
 
+    // One full-width list. It scrolls up and down when there are more tasks than fit;
+    // swiping sideways still changes page.
     grid = make_box(t);
     lv_obj_set_pos(grid, LEFT, TOP);
     lv_obj_set_size(grid, GRID_W, GRID_H);
+    lv_obj_add_flag(grid, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scroll_dir(grid, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(grid, LV_SCROLLBAR_MODE_AUTO);
+    lv_obj_set_style_bg_color(grid, col(C_FAINT), LV_PART_SCROLLBAR);
+    lv_obj_set_style_bg_opa(grid, LV_OPA_COVER, LV_PART_SCROLLBAR);
+    lv_obj_set_style_width(grid, 5, LV_PART_SCROLLBAR);
+    lv_obj_set_style_radius(grid, 3, LV_PART_SCROLLBAR);
     hint = make_label(t, &font_text_20, C_MUTED);
     lv_obj_center(hint);
 }
 
 void update(const Model& model) {
+    std::string now = model.has_tasks ? "y" : "n";
+    for (const TaskRow& row : model.tasks) {
+        now += '\n' + row.title + '\t' + row.due + '\t' + row.tone + (row.header ? "h" : row.indent ? "s" : "");
+    }
+    now += '\n' + std::to_string(model.tasks_total);
+    if (now == shown) return;
+    shown = now;
+
     lv_obj_clean(grid);
+    lv_obj_scroll_to_y(grid, 0, LV_ANIM_OFF);
     lv_label_set_text(count_lbl, "");
     if (model.tasks.empty()) {
         lv_label_set_text(hint, model.has_tasks ? "No open tasks."
@@ -75,24 +95,15 @@ void update(const Model& model) {
     snprintf(text, sizeof text, "%d open", model.tasks_total);
     lv_label_set_text(count_lbl, text);
 
-    // Fill the left column, then the right. A list's name never sits alone at the foot of a
-    // column, and the last slot is kept for "and N more" when not everything fits.
-    int slot = 0, drawn = 0;
-    const int capacity = ROWS * 2;
-    for (size_t i = 0; i < model.tasks.size(); i++) {
-        const TaskRow& row = model.tasks[i];
-        if (row.header && slot % ROWS == ROWS - 1) slot++;
-        bool last_slot = slot >= capacity - 1;
-        bool more_after = i + 1 < model.tasks.size() || model.tasks_total > drawn + 1;
-        if (slot >= capacity || (last_slot && (more_after || row.header))) break;
-        add_row(row, (slot / ROWS) * (COL_W + GAP), (slot % ROWS) * ROW_H);
+    int y = 0, drawn = 0;
+    for (const TaskRow& row : model.tasks) {
+        add_row(row, y);
         if (!row.header) drawn++;
-        slot++;
+        y += ROW_H;
     }
-    if (drawn < model.tasks_total && slot < capacity) {
+    if (drawn < model.tasks_total) {  // the server sends only so many
         snprintf(text, sizeof text, "and %d more", model.tasks_total - drawn);
-        lv_obj_t* more = make_label(grid, &font_text_18, C_DIM, text);
-        place(more, (slot / ROWS) * (COL_W + GAP) + 32, (slot % ROWS) * ROW_H, COL_W - 32, &font_text_18);
+        place(make_label(grid, &font_text_20, C_DIM, text), RING + 16, y, LIST_W - RING - 16, &font_text_20);
     }
 }
 

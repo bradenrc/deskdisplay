@@ -417,7 +417,7 @@ def test_tasks_sign_in_and_dashboard(setup, monkeypatch):
     monkeypatch.setattr(gtasks.requests, "post", post)
     monkeypatch.setattr(gtasks.requests, "get", get)
 
-    go = client.post("/tasks/connect").headers["location"]
+    go = client.post("/tasks/connect", data={"name": "Home"}).headers["location"]
     query = parse_qs(urlparse(go).query)
     assert query["scope"] == [gtasks.SCOPE] and "readonly" in gtasks.SCOPE
     assert query["redirect_uri"] == ["http://127.0.0.1/google/callback"]
@@ -433,13 +433,13 @@ def test_tasks_sign_in_and_dashboard(setup, monkeypatch):
     device = client.get("/api/dashboard").json()["tasks"]
     assert device["total"] == 3 and device["more"] == 0
     assert [(i["title"], i["indent"]) for i in device["lists"][0]["items"]] == [
-        ("First", 0),
-        ("Second", 1 - 1),
+        ("Second", 0),  # the one with a due date comes first
         ("Child", 1),
+        ("First", 0),
     ]
     assert len(device["lists"]) == 1 and "link" not in device["lists"][0]["items"][0]
     web = client.get("/api/dashboard?view=web").json()["tasks"]
-    assert web["lists"][0]["items"][0]["link"] == "https://tasks.google.com/task/a"
+    assert web["lists"][0]["items"][2]["link"] == "https://tasks.google.com/task/a"
 
     client.post("/tasks/disconnect")
     assert not core.tasks.connected() and core.tasks.configured()
@@ -455,7 +455,7 @@ def test_tasks_sign_in_ended_by_google(setup, monkeypatch):
     app, _, _ = setup
     core = app.state.core
     core.tasks.save_client(**CLIENT)
-    core.tasks._data["refresh_token"] = "old"
+    core.tasks._data["accounts"] = [{"name": "Home", "refresh_token": "old"}]
     core.store.set("tasks", [])
     monkeypatch.setattr(
         gtasks.requests,
@@ -497,3 +497,67 @@ def test_tasks_pasted_address(setup, monkeypatch):
         "msg=" in client.post("/tasks/paste", data={"url": pasted}).headers["location"]
     )
     assert core.tasks.connected()
+
+
+def test_tasks_two_accounts(setup, monkeypatch):
+    from urllib.parse import parse_qs, urlparse
+
+    from app import gtasks
+
+    app, client, tmp = setup
+    core = app.state.core
+    # a file from before there could be more than one account is carried over
+    (tmp / "data" / "google_tasks.json").write_text(
+        '{"client_id": "1.apps.googleusercontent.com", "client_secret": "s" , "refresh_token": "r-home"}'
+    )
+    core.tasks = gtasks.Account(tmp / "data" / "google_tasks.json")
+    assert core.tasks.accounts() == ["Home"]
+
+    def post(url, data=None, timeout=None):
+        if data.get("grant_type") == "authorization_code":
+            return FakeReply({"refresh_token": "r-work", "access_token": "a-work"})
+        if data.get("refresh_token") == "r-work":
+            return (
+                FakeReply({"error": "invalid_grant"}, 400)
+                if broken
+                else FakeReply({"access_token": "a-work"})
+            )
+        return FakeReply({"access_token": "a-home"})
+
+    def get(url, params=None, headers=None, timeout=None):
+        who = headers["Authorization"][-4:]
+        if url.endswith("/users/@me/lists"):
+            return FakeReply({"items": [{"id": "L", "title": "My Tasks"}]})
+        return FakeReply(
+            {"items": [{"id": "1", "title": f"A {who} task", "position": "1"}]}
+        )
+
+    broken = False
+    monkeypatch.setattr(gtasks.requests, "post", post)
+    monkeypatch.setattr(gtasks.requests, "get", get)
+    go = client.post("/tasks/connect", data={"name": " Work "}).headers["location"]
+    query = parse_qs(urlparse(go).query)
+    assert "select_account" in query["prompt"][0]
+    client.get(f"/google/callback?state={query['state'][0]}&code=c")
+    assert core.tasks.accounts() == ["Home", "Work"]
+    assert client.get("/api/status").json()["tasks_accounts"] == 2
+    assert "2 accounts connected" in client.get("/setup").text
+
+    core.runner.run_once("tasks", core.job_tasks)
+    lists = client.get("/api/dashboard").json()["tasks"]["lists"]
+    assert [(entry["title"], entry["items"][0]["title"]) for entry in lists] == [
+        ("Home", "A home task"),
+        ("Work", "A work task"),
+    ]
+
+    # Google ends the work sign-in: home carries on, and the problem is reported
+    broken = True
+    core.tasks._access.clear()
+    core.runner.run_once("tasks", core.job_tasks)
+    assert core.tasks.accounts() == ["Home"]
+    assert "Work" in core.store.meta()["tasks"]["detail"]
+    lists = client.get("/api/dashboard").json()["tasks"]["lists"]
+    assert [entry["title"] for entry in lists] == ["My Tasks"]
+
+    client.post("/tasks/disconnect", data={"name": "Home"})
+    assert core.tasks.accounts() == [] and core.tasks.configured()

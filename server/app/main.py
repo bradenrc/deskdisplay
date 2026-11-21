@@ -182,14 +182,13 @@ class Core:
         if not self.tasks.connected():
             self.store.drop("tasks")
             raise Skip("Google Tasks not connected")
-        try:
-            self.store.set("tasks", self.tasks.fetch())
-        except gtasks.TasksError:
-            if (
-                not self.tasks.connected()
-            ):  # Google ended the sign-in: show nothing stale
-                self.store.drop("tasks")
-            raise
+        lists, problems = self.tasks.fetch(self.store.get("tasks"))
+        if self.tasks.connected():
+            self.store.set("tasks", lists)
+        else:  # Google ended the only sign-in: show nothing stale
+            self.store.drop("tasks")
+        if problems:
+            raise RuntimeError("; ".join(problems))
 
     def job_photos(self) -> None:
         photos_cfg = self.cfg["photos"]
@@ -288,6 +287,7 @@ class Core:
             "drive_connected": self.drive.connected(),
             "drive_folder": bool(self.drive_folder_id()),
             "tasks_connected": self.tasks.connected(),
+            "tasks_accounts": len(self.tasks.accounts()),
             "photos": self.library.count(),
             "photos_in_drive_folder": self.library.catalog_size,
             "sources": sources,

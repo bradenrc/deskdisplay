@@ -123,10 +123,12 @@ bool parse_model(const char* json, size_t len, Model& out) {
         m.has_tasks = true;
         m.tasks_total = tasks["total"] | 0;
         for (JsonObjectConst list : tasks["lists"].as<JsonArrayConst>()) {
-            TaskRow name;
-            name.header = true;
-            name.title = list["title"] | "";
-            m.tasks.push_back(name);
+            if (tasks["lists"].size() > 1) {  // one list needs no heading
+                TaskRow name;
+                name.header = true;
+                name.title = list["title"] | "";
+                m.tasks.push_back(name);
+            }
             for (JsonObjectConst t : list["items"].as<JsonArrayConst>()) {
                 TaskRow row;
                 row.title = t["title"] | "";
